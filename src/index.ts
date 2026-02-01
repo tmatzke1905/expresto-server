@@ -66,7 +66,11 @@ export async function createServer(configInput: string | AppConfig) {
   const maskedConfig = maskConfigForLog(config);
   logger.app.info('Logger ready');
   logger.app.info('Loaded configuration', maskedConfig);
-  const eventBus = new EventBus();
+  const eventBus = new EventBus({
+    onUnhandledListenerError: ({ event, error }) => {
+      logger.app.error(`Unhandled EventBus listener error for '${event}'`, error);
+    },
+  });
   const services = new ServiceRegistry();
 
   // Create express app
@@ -200,6 +204,16 @@ export async function createServer(configInput: string | AppConfig) {
     } as const;
 
     logger.app.error('request_error', { status, url: req.originalUrl, method: req.method, err });
+    // Namespaced framework event for consumers (metrics/audit/etc.)
+    eventBus.emit('expresto.http.request_error', {
+      status,
+      url: req.originalUrl,
+      method: req.method,
+      code: (err as any)?.code,
+      message: (err as any)?.message,
+    });
+
+    // Backward-compatible legacy event name
     eventBus.emit('error', err);
 
     if (!res.headersSent) {

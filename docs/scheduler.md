@@ -83,6 +83,52 @@ export default cleanupJob;
   - Is protected by a reentrancy guard (no parallel executions of the same job).
 - On **SHUTDOWN**, all jobs are cancelled.
 
+## Events
+
+The Scheduler emits lifecycle and execution events via the **EventBus**.
+All framework events are namespaced under `expresto.scheduler.*`.
+
+These events are **fire-and-forget** and emitted asynchronously.
+They are intended for observability, metrics, auditing, and custom integrations.
+
+### Lifecycle Events
+
+| Event | Description | Payload |
+|------|------------|---------|
+| `expresto.scheduler.disabled` | Scheduler was not started | `{ reason, ts }` |
+| `expresto.scheduler.starting` | Scheduler initialization started | `{ mode, ts }` |
+| `expresto.scheduler.started` | Scheduler successfully started | `{ mode, ts }` |
+| `expresto.scheduler.startup_error` | Scheduler startup failed | `{ reason, mode?, ts }` |
+| `expresto.scheduler.stopping` | Scheduler shutdown initiated | `{ ts }` |
+| `expresto.scheduler.stopped` | Scheduler shutdown completed | `{ ts }` |
+
+`reason` values include:
+- `config_disabled`
+- `cluster_enabled`
+- `standalone_with_cluster`
+
+### Job Execution Events
+
+| Event | Description | Payload |
+|------|------------|---------|
+| `expresto.scheduler.job.start` | Job execution started | `{ job, ts }` |
+| `expresto.scheduler.job.success` | Job finished successfully | `{ job, durationMs, ts }` |
+| `expresto.scheduler.job.error` | Job execution failed | `{ job, durationMs, error, ts }` |
+| `expresto.scheduler.job.skipped` | Job execution skipped | `{ job, reason, ts }` |
+
+`reason` values include:
+- `running` (previous execution still active)
+- `not_leader` (leader-only job on non-leader instance)
+
+### Timeout Job Events
+
+Timeout-based scheduler tasks emit the following events:
+
+| Event | Description | Payload |
+|------|------------|---------|
+| `expresto.scheduler.timeout.start` | Timeout task started | `{ name, ts }` |
+| `expresto.scheduler.timeout.success` | Timeout task finished | `{ name, durationMs, ts }` |
+| `expresto.scheduler.timeout.error` | Timeout task failed | `{ name, durationMs, error, ts }` |
 ---
 
 ## Usage
@@ -101,4 +147,8 @@ Best for heavy or long-running jobs (batch reports, imports).
 
 - Scheduler logs each job’s start, completion time, and errors into the `application.log`.
 - Jobs can also use `ctx.logger` for custom logging.
+
+> **Note**  
+> The EventBus is optional. If no EventBus is registered in the HookContext,
+> the Scheduler continues to operate without emitting events.
 ```

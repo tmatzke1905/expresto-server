@@ -10,6 +10,24 @@ type Scheduled = {
   cfg: SchedulerJobConfig;
 };
 
+type EventBusLike = {
+  emit: (event: string, payload: unknown) => void;
+};
+
+function getEventBus(ctx: HookContext): EventBusLike | undefined {
+  // HookContext may or may not expose an EventBus depending on the bootstrap wiring.
+  // We keep this optional to avoid breaking standalone scheduler usage.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (ctx as any).eventBus as EventBusLike | undefined;
+}
+
+function serializeError(err: unknown): { name?: string; message: string; stack?: string } {
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message, stack: err.stack };
+  }
+  return { message: String(err) };
+}
+
 export class SchedulerService {
   private tasks = new Map<string, Scheduled>();
   private tz?: string;
@@ -46,6 +64,7 @@ export class SchedulerService {
     if (this.tasks.has(name)) {
       throw new Error(`[Scheduler] job "${name}" already registered`);
     }
+    const eventBus = getEventBus(this.ctx);
     const scheduled: Scheduled = {
       name,
       task: cron.schedule(
@@ -53,6 +72,11 @@ export class SchedulerService {
         async () => {
           if (scheduled.running) {
             this.ctx.logger.app.warn(`[Scheduler] skip "${name}" — still running`);
+            eventBus?.emit('expresto.scheduler.job.skipped', {
+              job: name,
+              reason: 'running',
+              ts: new Date().toISOString(),
+            });
             return;
           }
           // leaderOnly optional prüfen (process-scope; für verteilte Locks später LockProvider nutzen)
@@ -60,18 +84,39 @@ export class SchedulerService {
             const ok = await Promise.resolve(this.leaderCheck());
             if (!ok) {
               this.ctx.logger.app.debug(`[Scheduler] skip "${name}" — not leader`);
+              eventBus?.emit('expresto.scheduler.job.skipped', {
+                job: name,
+                reason: 'not_leader',
+                ts: new Date().toISOString(),
+              });
               return;
             }
           }
           scheduled.running = true;
           const started = Date.now();
           this.ctx.logger.app.info(`[Scheduler] start "${name}"`);
+          eventBus?.emit('expresto.scheduler.job.start', {
+            job: name,
+            ts: new Date().toISOString(),
+          });
           try {
             await mod.run(this.ctx, cfg.options);
             const dur = Date.now() - started;
             this.ctx.logger.app.info(`[Scheduler] done "${name}" in ${dur}ms`);
+            eventBus?.emit('expresto.scheduler.job.success', {
+              job: name,
+              durationMs: dur,
+              ts: new Date().toISOString(),
+            });
           } catch (err) {
-            this.ctx.logger.app.error(`[Scheduler] error in "${name}": ${(err as Error).message}`);
+            const dur = Date.now() - started;
+            this.ctx.logger.app.error(`[Scheduler] error in "${name}"`, err);
+            eventBus?.emit('expresto.scheduler.job.error', {
+              job: name,
+              durationMs: dur,
+              error: serializeError(err),
+              ts: new Date().toISOString(),
+            });
           } finally {
             scheduled.running = false;
           }
@@ -91,16 +136,30 @@ export class SchedulerService {
     if (this.tasks.has(name)) {
       throw new Error(`[Scheduler] timeout "${name}" already exists`);
     }
+    const eventBus = getEventBus(this.ctx);
     let cancelled = false;
     const timer = setTimeout(async () => {
       if (cancelled) return;
       const started = Date.now();
       this.ctx.logger.app.info(`[Scheduler] timeout "${name}" start`);
+      eventBus?.emit('expresto.scheduler.timeout.start', { name, ts: new Date().toISOString() });
       try {
         await fn();
         this.ctx.logger.app.info(`[Scheduler] timeout "${name}" done in ${Date.now() - started}ms`);
+        eventBus?.emit('expresto.scheduler.timeout.success', {
+          name,
+          durationMs: Date.now() - started,
+          ts: new Date().toISOString(),
+        });
       } catch (err) {
-        this.ctx.logger.app.error(`[Scheduler] timeout "${name}" error: ${(err as Error).message}`);
+        const dur = Date.now() - started;
+        this.ctx.logger.app.error(`[Scheduler] timeout "${name}" error`, err);
+        eventBus?.emit('expresto.scheduler.timeout.error', {
+          name,
+          durationMs: dur,
+          error: serializeError(err),
+          ts: new Date().toISOString(),
+        });
       } finally {
         this.tasks.delete(name);
       }

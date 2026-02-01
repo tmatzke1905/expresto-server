@@ -98,11 +98,21 @@ export class WebSocketManager {
     // Basic connection lifecycle logging + EventBus integration
     this.io.on('connection', socket => {
       this.logger.app.info(`WebSocket client connected: ${socket.id}`);
-      this.eventBus.emit('websocket:connected', socket);
+
+      // Keep payloads small and stable for consumers.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const s = socket as any;
+      this.eventBus.emit('expresto.websocket.connected', {
+        socketId: socket.id,
+        auth: s.data?.auth,
+      });
 
       socket.on('disconnect', reason => {
         this.logger.app.info(`WebSocket client disconnected: ${socket.id} (${reason})`);
-        this.eventBus.emit('websocket:disconnected', socket, reason);
+        this.eventBus.emit('expresto.websocket.disconnected', {
+          socketId: socket.id,
+          reason,
+        });
       });
     });
   }

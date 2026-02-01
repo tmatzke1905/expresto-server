@@ -1,65 +1,122 @@
-
-
 # Event System
 
-expRESTo includes a simple but powerful event system to allow decoupled communication between internal modules.
-
----
+expRESTo includes an async-first event bus to allow decoupled communication between internal modules and user projects.
 
 ## Overview
 
-Events are emitted and handled using an internal `EventEmitter` instance.
+- Events are identified by a string name.
+- Handlers are executed **in registration order**.
+- Handlers may be async.
+- `emit()` is **fire-and-forget** (async by default).
+- Use `emitAsync()` only if you explicitly want to await all handlers.
 
-Modules can:
+## Naming Convention
 
-- Emit typed events
-- Subscribe to specific event types
-- Receive payloads with a defined argument structure
+Use a consistent namespace to avoid collisions.
 
----
+- Framework events: `expresto.<domain>.<event>`
+  - Example: `expresto.websocket.connected`
+- Project-specific events: `<project>.<domain>.<event>`
 
-## Emitting Events
+## Using the EventBus
+
+### Subscribing
+
+`on()` returns an unsubscribe function.
 
 ```ts
-import { Events } from '../lib/events';
+const unsubscribe = eventBus.on('expresto.websocket.connected', async (payload) => {
+  // payload: { socketId: string, auth?: unknown }
+});
 
-Events.emit('error.logged', {
-  timestamp: Date.now(),
-  error: err,
-  route: req.path
+// later
+unsubscribe();
+```
+
+### Emitting
+
+`emit()` schedules async listener execution.
+
+```ts
+eventBus.emit('myproject.audit.user_login', {
+  userId: '42',
+  ts: new Date().toISOString(),
 });
 ```
 
----
-
-## Listening to Events
+If you need to await all handlers:
 
 ```ts
-Events.on('error.logged', (data) => {
-  console.warn(`[event] Error logged:`, data);
-});
+await eventBus.emitAsync('myproject.audit.flush', { ts: Date.now() });
 ```
 
-You can listen to any event, including internal hooks like:
+## Framework Events (currently emitted)
 
-- `startup.ready`
-- `shutdown.begin`
-- `security.failed`
+### WebSocket
 
----
+- `expresto.websocket.connected`
+  - `{ socketId: string, auth?: unknown }`
+- `expresto.websocket.disconnected`
+  - `{ socketId: string, reason: string }`
 
-## Best Practices
+### Scheduler
 
-- Use consistent naming: `module.event` (e.g. `db.connected`, `metrics.flush`)
-- Always define the event payload shape (use TypeScript types)
-- Avoid long-running handlers — use `setImmediate` if needed
+The Scheduler emits lifecycle and execution events. All events are fire-and-forget
+and emitted asynchronously.
 
----
+#### Lifecycle
 
-## Event Ordering
+- `expresto.scheduler.disabled`
+  - `{ reason: string, ts: string }`
+- `expresto.scheduler.starting`
+  - `{ mode: string, ts: string }`
+- `expresto.scheduler.started`
+  - `{ mode: string, ts: string }`
+- `expresto.scheduler.startup_error`
+  - `{ reason: string, mode?: string, ts: string }`
+- `expresto.scheduler.stopping`
+  - `{ ts: string }`
+- `expresto.scheduler.stopped`
+  - `{ ts: string }`
 
-Event arguments are always passed in the same order. All handlers are asynchronous by default.
+#### Job Execution
 
----
+- `expresto.scheduler.job.start`
+  - `{ job: string, ts: string }`
+- `expresto.scheduler.job.success`
+  - `{ job: string, durationMs: number, ts: string }`
+- `expresto.scheduler.job.error`
+  - `{ job: string, durationMs: number, error: unknown, ts: string }`
+- `expresto.scheduler.job.skipped`
+  - `{ job: string, reason: string, ts: string }`
 
-_Last updated: 2025-09-14_
+#### Timeout Jobs
+
+- `expresto.scheduler.timeout.start`
+  - `{ name: string, ts: string }`
+- `expresto.scheduler.timeout.success`
+  - `{ name: string, durationMs: number, ts: string }`
+- `expresto.scheduler.timeout.error`
+  - `{ name: string, durationMs: number, error: unknown, ts: string }`
+
+## Listener Errors
+
+If a listener throws or rejects, the EventBus forwards the error to:
+
+- `expresto.eventbus.listener_error`
+
+Payload:
+
+```ts
+{
+  event: string;
+  error: unknown;
+  payload: unknown;
+}
+```
+
+If nobody subscribes to this error event, the EventBus invokes an optional fallback handler
+(e.g. wired to the application logger during bootstrap). If no fallback is configured,
+listener errors are silently ignored.
+
+_Last updated: 2026-02-01_

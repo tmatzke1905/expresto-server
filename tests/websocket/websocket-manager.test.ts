@@ -196,6 +196,71 @@ describe('WebSocketManager', () => {
   });
 
   // ------------------------------------------------------------------
+  // 3b. EventBus emissions
+  // ------------------------------------------------------------------
+  it('emits expresto.websocket.connected with stable payload', () => {
+    let connectionHandler: ((socket: any) => void) | undefined;
+    const onSpy = vi
+      .spyOn(IOServer.prototype, 'on')
+      .mockImplementation(function (event: any, cb: any) {
+        if (event === 'connection') connectionHandler = cb;
+        return this as any;
+      });
+    const emitSpy = vi.spyOn(eventBus, 'emit');
+
+    // constructing the manager registers the connection handler
+    new WebSocketManager(server, config, logger, eventBus, services);
+
+    const fakeSocket: any = {
+      id: 'sock-1',
+      data: { auth: { sub: '123' } },
+      on: vi.fn(),
+    };
+
+    expect(connectionHandler).toBeDefined();
+    connectionHandler?.(fakeSocket);
+
+    expect(emitSpy).toHaveBeenCalledWith('expresto.websocket.connected', {
+      socketId: 'sock-1',
+      auth: { sub: '123' },
+    });
+  });
+
+  it('emits expresto.websocket.disconnected with stable payload', () => {
+    let connectionHandler: ((socket: any) => void) | undefined;
+    const onSpy = vi
+      .spyOn(IOServer.prototype, 'on')
+      .mockImplementation(function (event: any, cb: any) {
+        if (event === 'connection') connectionHandler = cb;
+        return this as any;
+      });
+    const emitSpy = vi.spyOn(eventBus, 'emit');
+
+    new WebSocketManager(server, config, logger, eventBus, services);
+
+    // capture disconnect handler registered on socket.on('disconnect', ...)
+    let disconnectHandler: ((reason: string) => void) | undefined;
+    const fakeSocket: any = {
+      id: 'sock-2',
+      data: { auth: { sub: '999' } },
+      on: vi.fn((event: string, cb: (reason: string) => void) => {
+        if (event === 'disconnect') disconnectHandler = cb;
+      }),
+    };
+
+    expect(connectionHandler).toBeDefined();
+    connectionHandler?.(fakeSocket);
+    expect(disconnectHandler).toBeDefined();
+
+    disconnectHandler?.('client namespace disconnect');
+
+    expect(emitSpy).toHaveBeenCalledWith('expresto.websocket.disconnected', {
+      socketId: 'sock-2',
+      reason: 'client namespace disconnect',
+    });
+  });
+
+  // ------------------------------------------------------------------
   // 4. shutdown()
   // ------------------------------------------------------------------
   it('calls io.close() during shutdown', async () => {

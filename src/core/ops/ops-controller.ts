@@ -1,8 +1,8 @@
-
 import express from 'express';
 import { routeRegistry, RegisteredRoute } from '../../lib/routing/route-registry';
 import { readLogTail } from './log-reader';
 import path from 'node:path';
+import { readPublicConfig } from './config-reader';
 
 const router = express.Router();
 
@@ -17,6 +17,14 @@ router.get('/__routes', (_req, res) => {
   }));
 
   res.json(result);
+});
+
+router.get('/__config', (_req, res) => {
+  try {
+    res.json(readPublicConfig());
+  } catch (err) {
+    res.status(500).json({ error: `Could not read config: ${String(err)}` });
+  }
 });
 
 router.get('/__logs/:type', async (req, res) => {
