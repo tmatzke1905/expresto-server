@@ -6,6 +6,7 @@ expRESTo includes an async-first event bus to allow decoupled communication betw
 
 - Events are identified by a string name.
 - Handlers are executed **in registration order**.
+- Listener execution order is deterministic: **exact** event listeners → **namespace** listeners → **wildcard** listeners.
 - Handlers may be async.
 - `emit()` is **fire-and-forget** (async by default).
 - Use `emitAsync()` only if you explicitly want to await all handlers.
@@ -32,6 +33,31 @@ const unsubscribe = eventBus.on('expresto.websocket.connected', async (payload) 
 // later
 unsubscribe();
 ```
+
+#### Subscribing to namespaces and all events
+
+Sometimes you want to observe a whole subsystem (e.g. WebSocket) without subscribing to each event.
+
+```ts
+// Observe all WebSocket-related events
+const offWs = eventBus.onNamespace('expresto.websocket.', async (event, payload) => {
+  // event: e.g. "expresto.websocket.connected"
+});
+
+// Observe every event (useful for debugging / tracing)
+const offAny = eventBus.onAny(async (event, payload) => {
+  // be careful: this will run for all events
+});
+
+// later
+offWs();
+offAny();
+```
+
+Notes:
+
+- Namespace and wildcard handlers run **after** exact event handlers.
+- Prefer namespaced subscriptions over `onAny()` in production.
 
 ### Emitting
 

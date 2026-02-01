@@ -2,6 +2,13 @@ import { EventEmitter } from 'node:events';
 
 export type EventHandler<T = unknown> = (payload: T) => void | Promise<void>;
 
+export type AnyEventHandler = (event: string, payload: unknown) => void | Promise<void>;
+
+export type NamespaceHandler = {
+  prefix: string;
+  handler: AnyEventHandler;
+};
+
 export type ListenerErrorPayload = {
   event: string;
   error: unknown;
@@ -35,6 +42,8 @@ export type EventBusOptions = {
  */
 export class EventBus {
   private readonly emitter: EventEmitter;
+  private readonly anyHandlers: Set<AnyEventHandler> = new Set();
+  private readonly namespaceHandlers: Set<NamespaceHandler> = new Set();
   private readonly onUnhandledListenerError?: (payload: ListenerErrorPayload) => void;
 
   /**
@@ -76,10 +85,44 @@ export class EventBus {
   }
 
   /**
+   * Subscribe to all events (wildcard).
+   * Returns an unsubscribe function.
+   */
+  onAny(handler: AnyEventHandler): () => void {
+    this.anyHandlers.add(handler);
+    return () => this.anyHandlers.delete(handler);
+  }
+
+  /**
+   * Subscribe to all events with a given prefix.
+   * Example: onNamespace('expresto.websocket.', ...)
+   * Returns an unsubscribe function.
+   */
+  onNamespace(prefix: string, handler: AnyEventHandler): () => void {
+    const entry: NamespaceHandler = { prefix, handler };
+    this.namespaceHandlers.add(entry);
+    return () => this.namespaceHandlers.delete(entry);
+  }
+
+  /**
    * Unsubscribe a handler.
    */
   off<T = unknown>(event: string, handler: EventHandler<T>): void {
     this.emitter.off(event, handler as unknown as (...args: unknown[]) => void);
+  }
+
+  private async runHandler(event: string, originalPayload: unknown, fn: () => void | Promise<void>): Promise<void> {
+    try {
+      await Promise.resolve(fn());
+    } catch (error) {
+      const errPayload: ListenerErrorPayload = { event, error, payload: originalPayload };
+
+      if (this.emitter.listenerCount(EventBus.LISTENER_ERROR_EVENT) > 0 && event !== EventBus.LISTENER_ERROR_EVENT) {
+        void this.emitAsync(EventBus.LISTENER_ERROR_EVENT, errPayload);
+      } else {
+        this.onUnhandledListenerError?.(errPayload);
+      }
+    }
   }
 
   /**
@@ -97,21 +140,20 @@ export class EventBus {
   async emitAsync<T = unknown>(event: string, payload: T): Promise<void> {
     const listeners = this.emitter.listeners(event) as unknown as Array<EventHandler<T>>;
 
+    // 1) exact event listeners (stable order from EventEmitter)
     for (const listener of listeners) {
-      try {
-        await Promise.resolve(listener(payload));
-      } catch (error) {
-        const errPayload: ListenerErrorPayload = { event, error, payload };
+      await this.runHandler(event, payload, () => listener(payload));
+    }
 
-        // If someone listens for listener errors, forward the error there.
-        if (this.emitter.listenerCount(EventBus.LISTENER_ERROR_EVENT) > 0 && event !== EventBus.LISTENER_ERROR_EVENT) {
-          // Fire-and-forget to avoid recursive deadlocks.
-          void this.emitAsync(EventBus.LISTENER_ERROR_EVENT, errPayload);
-        } else {
-          // If nobody handles listener errors, invoke an optional fallback.
-          this.onUnhandledListenerError?.(errPayload);
-        }
-      }
+    // 2) namespace listeners (stable order by registration)
+    for (const entry of this.namespaceHandlers) {
+      if (!event.startsWith(entry.prefix)) continue;
+      await this.runHandler(event, payload, () => entry.handler(event, payload));
+    }
+
+    // 3) wildcard listeners (stable order by registration)
+    for (const handler of this.anyHandlers) {
+      await this.runHandler(event, payload, () => handler(event, payload));
     }
   }
 }
