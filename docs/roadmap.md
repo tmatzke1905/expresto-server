@@ -2,9 +2,27 @@
 
 Current development focus:
 
+
 1. EventBus stabilization
 2. Scheduler events
 3. WebSocket events
+
+## Agent Execution Order
+
+Coding agents should implement the current focus areas in the following order:
+
+1. EventBus stabilization
+2. Scheduler events
+3. WebSocket events
+
+Execution rules:
+
+- Finish one focus area before starting the next.
+- Do not work on multiple focus areas in the same branch.
+- Use the matching `codex/*` branch for the active task.
+- Run tests after each focus area is completed.
+- Update documentation when behavior changes.
+- If a significant architectural change is required, add a new ADR entry to `docs/design-decisions.md`.
 
 # Expresto – Development Roadmap
 
@@ -347,6 +365,109 @@ db.pool()
 
 ---
 
+
+
+# Branch Strategy
+
+All work should be done on **dedicated topic branches**.
+Neither humans nor coding agents should work directly on `main`.
+
+Branch naming rules:
+
+``` 
+main                         -> stable branch
+codex/<topic>                -> branch for coding-agent work
+feature/<topic>              -> branch for manual feature work
+fix/<topic>                  -> branch for bug fixes
+refactor/<topic>             -> branch for non-functional internal cleanup
+docs/<topic>                 -> branch for documentation-only work
+```
+
+Rules:
+
+- Use `main` only as the protected integration branch.
+- Use `codex/<topic>` when Codex or another coding agent implements a task.
+- Use `feature/<topic>` for manual feature development.
+- Use `fix/<topic>` for bug fixes.
+- Use `refactor/<topic>` for internal cleanup without behavior changes.
+- Use `docs/<topic>` for documentation-only changes.
+- Open a pull request before merging into `main`.
+- Delete merged topic branches afterwards.
+
+## Recommended Branches for Current Roadmap
+
+``` 
+codex/eventbus-stabilization
+codex/websocket-events
+codex/scheduler-events
+codex/ops-services-endpoint
+codex/ops-metrics-endpoint
+codex/service-registry-dependencies
+codex/service-registry-status-tracking
+codex/security-hook-pipeline
+codex/websocket-auth-support
+codex/logging-structured-fields
+codex/test-coverage-increase
+codex/example-project
+codex/docs-synchronization
+```
+
+### Create Branches (Git Commands)
+
+You can create all recommended branches using the following commands:
+
+```
+git checkout main
+
+git checkout -b codex/eventbus-stabilization
+
+git checkout -b codex/websocket-events
+
+git checkout -b codex/scheduler-events
+
+git checkout -b codex/ops-services-endpoint
+
+git checkout -b codex/ops-metrics-endpoint
+
+git checkout -b codex/service-registry-dependencies
+
+git checkout -b codex/service-registry-status-tracking
+
+git checkout -b codex/security-hook-pipeline
+
+git checkout -b codex/websocket-auth-support
+
+git checkout -b codex/logging-structured-fields
+
+git checkout -b codex/test-coverage-increase
+
+git checkout -b codex/example-project
+
+git checkout -b codex/docs-synchronization
+```
+
+If the branches should also be pushed to the remote repository:
+
+```
+git push -u origin codex/eventbus-stabilization
+```
+
+Repeat for each branch as needed.
+
+Agents should always work on the corresponding `codex/*` branch for the
+specific task they are implementing.
+
+Optional manual branches:
+
+``` 
+feature/database-facade-design
+feature/database-facade-prototype
+refactor/core-cleanup
+docs/architecture-maintenance
+```
+
+Use one branch per task or per tightly related task group.
+Avoid mixing unrelated changes in the same branch.
 
 # Notes for Coding Agents
 
