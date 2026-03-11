@@ -18,8 +18,8 @@
 import express from 'express';
 import path from 'node:path';
 
+import { getConfig as getLoadedConfig } from '../../lib/config';
 import { routeRegistry } from '../../lib/routing/route-registry';
-import { readPublicConfig } from './config-reader';
 import { readLogTail } from './log-reader';
 
 // Express router mounted under the configured contextRoot (e.g. /api).
@@ -104,6 +104,49 @@ function nowIso(): string {
 }
 
 /**
+ * Redacts secret-like config values before they are exposed via `GET /__config`.
+ *
+ * Rules:
+ * - Keys containing `secret`, `password`, `token`, `key` are masked.
+ * - Special case: `auth.basic.users` is a username->password map, therefore
+ *   all values below that path are masked even though the keys are usernames.
+ */
+function redact(value: unknown, path: string[] = []): unknown {
+  const p = path.join('.');
+
+  // Special case: basic auth user map -> always mask values
+  if (p === 'auth.basic.users' && typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    const masked: Record<string, unknown> = {};
+    for (const user of Object.keys(obj)) {
+      masked[user] = '***';
+    }
+    return masked;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((v, i) => redact(v, [...path, String(i)]));
+  }
+
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+
+    for (const [k, v] of Object.entries(obj)) {
+      if (/(secret|password|token|key)/i.test(k)) {
+        out[k] = v == null ? v : '***';
+      } else {
+        out[k] = redact(v, [...path, k]);
+      }
+    }
+
+    return out;
+  }
+
+  return value;
+}
+
+/**
  * GET /__health
  *
  * Lightweight health probe.
@@ -177,7 +220,8 @@ opsController.get('/__routes', (req, res) => {
  * GET /__config
  *
  * Returns the active configuration in a form that is safe to expose.
- * The implementation uses `readPublicConfig()` which redacts secret-like keys.
+ * The implementation uses a local path-aware `redact()` helper which masks
+ * secret-like keys and special cases such as `auth.basic.users`.
  *
  * Emits:
  * - expresto.ops.config_read on success
@@ -185,7 +229,7 @@ opsController.get('/__routes', (req, res) => {
  */
 opsController.get('/__config', (req, res) => {
   try {
-    const cfg = readPublicConfig();
+    const cfg = redact(getLoadedConfig());
 
     getEventBus(req)?.emit('expresto.ops.config_read', { ts: nowIso() });
 
