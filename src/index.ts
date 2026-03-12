@@ -6,7 +6,7 @@ import log4js from 'log4js';
 import { AppConfig, getConfig, initConfig } from './lib/config';
 import { ControllerLoader } from './lib/controller-loader';
 import { HttpError } from './lib/errors';
-import { EventBus } from './lib/events';
+import { createEventPayload, EventBus } from './lib/events';
 import { HookContext, hookManager, LifecycleHook } from './lib/hooks';
 import {
   createPrometheusRouter,
@@ -71,7 +71,7 @@ export async function createServer(configInput: string | AppConfig) {
       logger.app.error(`Unhandled EventBus listener error for '${event}'`, error);
     },
   });
-  const services = new ServiceRegistry();
+  const services = new ServiceRegistry(eventBus);
 
   // Create express app
   const app = express();
@@ -150,13 +150,13 @@ export async function createServer(configInput: string | AppConfig) {
 
     logger.app.error('request_error', { status, url: req.originalUrl, method: req.method, err });
     // Namespaced framework event for consumers (metrics/audit/etc.)
-    eventBus.emit('expresto.http.request_error', {
+    eventBus.emit('expresto.http.request_error', createEventPayload('http-error-handler', {
       status,
       url: req.originalUrl,
       method: req.method,
       code: (err as any)?.code,
       message: (err as any)?.message,
-    });
+    }));
 
     // Backward-compatible legacy event name
     eventBus.emit('error', err);

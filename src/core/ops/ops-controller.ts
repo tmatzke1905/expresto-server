@@ -18,6 +18,7 @@
 import express from 'express';
 import path from 'node:path';
 
+import { createEventPayload, type StableEventBus } from '../../lib/events';
 import { getConfig as getLoadedConfig } from '../../lib/config';
 import { routeRegistry } from '../../lib/routing/route-registry';
 import { readLogTail } from './log-reader';
@@ -36,7 +37,7 @@ export const opsController = express.Router();
  * circular dependencies and to keep the ops controller usable in tests.
  */
 type EventBusLike = {
-  emit: (event: string, payload: unknown) => void;
+  emit: StableEventBus['emit'];
 };
 
 /**
@@ -94,13 +95,6 @@ function getServices(req: express.Request): ServicesLike | undefined {
 function getConfig(req: express.Request): ConfigLike | undefined {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (req.app.locals as any).config as ConfigLike | undefined;
-}
-
-/**
- * Timestamp helper used in event payloads.
- */
-function nowIso(): string {
-  return new Date().toISOString();
 }
 
 /**
@@ -168,10 +162,10 @@ opsController.get('/__health', (req, res) => {
   const services = getServices(req);
   const serviceNames = services ? Object.keys(services.getAll()) : [];
 
-  getEventBus(req)?.emit('expresto.ops.health_read', {
-    ts: nowIso(),
+  getEventBus(req)?.emit('expresto.ops.health_read', createEventPayload('ops-controller', {
+    endpoint: '/__health',
     services: serviceNames,
-  });
+  }));
 
   res.json({
     status: 'ok',
@@ -213,10 +207,15 @@ opsController.get('/__routes', (req, res) => {
       source: r.source ?? 'unknown',
     }));
 
+  const routesSource = serviceRoutes ? 'service-registry' : 'route-registry';
+
   getEventBus(req)?.emit('expresto.ops.routes_read', {
-    ts: nowIso(),
-    count: routes.length,
-    source: serviceRoutes ? 'service-registry' : 'route-registry',
+    ...createEventPayload('ops-controller', {
+      endpoint: '/__routes',
+      count: routes.length,
+      routeSource: routesSource,
+    }),
+    source: routesSource,
   });
 
   res.json(routes);
@@ -237,14 +236,17 @@ opsController.get('/__config', (req, res) => {
   try {
     const cfg = redact(getLoadedConfig());
 
-    getEventBus(req)?.emit('expresto.ops.config_read', { ts: nowIso() });
+    getEventBus(req)?.emit(
+      'expresto.ops.config_read',
+      createEventPayload('ops-controller', { endpoint: '/__config' })
+    );
 
     res.json(cfg);
   } catch (err) {
-    getEventBus(req)?.emit('expresto.ops.config_error', {
-      ts: nowIso(),
+    getEventBus(req)?.emit('expresto.ops.config_error', createEventPayload('ops-controller', {
+      endpoint: '/__config',
       error: String(err),
-    });
+    }));
 
     res.status(500).json({ error: `Could not read config: ${String(err)}` });
   }
@@ -278,7 +280,8 @@ opsController.get('/__logs/:type', async (req, res) => {
 
   if (!['application', 'access'].includes(type)) {
     eventBus?.emit('expresto.ops.logs_not_found', {
-      ts: nowIso(),
+      ...createEventPayload('ops-controller'),
+      endpoint: '/__logs/:type',
       type,
       lines: lineCount,
       status: 400,
@@ -309,14 +312,16 @@ opsController.get('/__logs/:type', async (req, res) => {
   try {
     const content = await readLogTail(filePath, lineCount);
     eventBus?.emit('expresto.ops.logs_read', {
-      ts: nowIso(),
+      ...createEventPayload('ops-controller'),
+      endpoint: '/__logs/:type',
       type,
       lines: lineCount,
     });
     res.type('text/plain').send(content);
   } catch (err) {
     eventBus?.emit('expresto.ops.logs_error', {
-      ts: nowIso(),
+      ...createEventPayload('ops-controller'),
+      endpoint: '/__logs/:type',
       type,
       lines: lineCount,
       error: String(err),

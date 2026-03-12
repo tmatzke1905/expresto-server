@@ -74,6 +74,52 @@ describe('Scheduler', () => {
     expect((scheduler as any).tasks.size).toBe(0);
     expect(dummyJob.wasExecuted()).toBe(false);
   });
+
+  it('emits standardized timeout events when an EventBus is available', async () => {
+    vi.useFakeTimers();
+    try {
+      const emit = vi.fn();
+      const ctx: any = {
+        config: getConfig(),
+        logger: {
+          app: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+        },
+        services: new Map(),
+        eventBus: { emit },
+      };
+
+      const scheduler = new SchedulerService(
+        {
+          enabled: true,
+          mode: 'attached',
+          jobs: {},
+        } as any,
+        ctx
+      );
+
+      scheduler.scheduleTimeout('evt-check', async () => {}, 10);
+      await vi.advanceTimersByTimeAsync(20);
+
+      expect(emit).toHaveBeenCalledWith(
+        'expresto.scheduler.timeout.start',
+        expect.objectContaining({
+          ts: expect.any(String),
+          source: 'scheduler-service',
+          name: 'evt-check',
+        })
+      );
+      expect(emit).toHaveBeenCalledWith(
+        'expresto.scheduler.timeout.success',
+        expect.objectContaining({
+          ts: expect.any(String),
+          source: 'scheduler-service',
+          name: 'evt-check',
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 it('should run in standalone mode without HTTP server', async () => {

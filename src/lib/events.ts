@@ -9,6 +9,14 @@ export type NamespaceHandler = {
   handler: AnyEventHandler;
 };
 
+export type EventContext = Record<string, unknown>;
+
+export type StandardEventPayload<TContext extends EventContext = EventContext> = {
+  ts: string;
+  source?: string;
+  context?: TContext;
+} & TContext;
+
 export type ListenerErrorPayload = {
   event: string;
   error: unknown;
@@ -29,6 +37,41 @@ export type EventBusOptions = {
 };
 
 /**
+ * Stable EventBus API that framework modules rely on.
+ */
+export interface StableEventBus {
+  on<T = unknown>(event: string, handler: EventHandler<T>): () => void;
+  off<T = unknown>(event: string, handler: EventHandler<T>): void;
+  emit<T = unknown>(event: string, payload: T): void;
+  emitAsync<T = unknown>(event: string, payload: T): Promise<void>;
+}
+
+/**
+ * Builds the standard payload shape for framework events.
+ *
+ * For backwards compatibility we keep contextual fields also flattened at the
+ * top-level so existing consumers do not break.
+ */
+export function createEventPayload<TContext extends EventContext = EventContext>(
+  source: string,
+  context?: TContext
+): StandardEventPayload<TContext> {
+  const ts = new Date().toISOString();
+  if (context && Object.keys(context).length > 0) {
+    return {
+      ...context,
+      ts,
+      source,
+      context,
+    } as StandardEventPayload<TContext>;
+  }
+  return {
+    ts,
+    source,
+  } as StandardEventPayload<TContext>;
+}
+
+/**
  * EventBus is a small async-first event system.
  *
  * Design goals:
@@ -40,7 +83,7 @@ export type EventBusOptions = {
  * - `emit()` is fire-and-forget and schedules async handler execution.
  * - Use `emitAsync()` if you explicitly want to await all handlers.
  */
-export class EventBus {
+export class EventBus implements StableEventBus {
   private readonly emitter: EventEmitter;
   private readonly anyHandlers: Set<AnyEventHandler> = new Set();
   private readonly namespaceHandlers: Set<NamespaceHandler> = new Set();

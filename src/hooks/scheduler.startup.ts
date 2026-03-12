@@ -1,17 +1,18 @@
 import { hookManager, LifecycleHook, HookContext } from '../lib/hooks';
+import { createEventPayload, type StableEventBus } from '../lib/events';
 import { SchedulerService } from '../lib/scheduler/scheduler-service';
 import type { SchedulerConfig, SchedulerJobConfig, SchedulerModule } from '../lib/scheduler/types';
 
 // HookContext may or may not expose an EventBus depending on bootstrap wiring.
 // We keep this optional to avoid breaking standalone scheduler usage.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getEventBus = (ctx: HookContext) => (ctx as any).eventBus as { emit: (event: string, payload: unknown) => void } | undefined;
+const getEventBus = (ctx: HookContext) => (ctx as any).eventBus as { emit: StableEventBus['emit'] } | undefined;
 
 hookManager.on(LifecycleHook.STARTUP, async (ctx: HookContext) => {
   const schedCfg: SchedulerConfig | undefined = ctx.config.scheduler;
   const eventBus = getEventBus(ctx);
   if (!schedCfg?.enabled) {
-    eventBus?.emit('expresto.scheduler.disabled', { reason: 'config_disabled', ts: new Date().toISOString() });
+    eventBus?.emit('expresto.scheduler.disabled', createEventPayload('scheduler-startup-hook', { reason: 'config_disabled' }));
     ctx.logger.app.info('[Scheduler] disabled');
     return;
   }
@@ -19,19 +20,18 @@ hookManager.on(LifecycleHook.STARTUP, async (ctx: HookContext) => {
   // Cluster-Check
   if (ctx.config.cluster?.enabled) {
     if (schedCfg.mode === 'standalone') {
-      eventBus?.emit('expresto.scheduler.startup_error', {
+      eventBus?.emit('expresto.scheduler.startup_error', createEventPayload('scheduler-startup-hook', {
         reason: 'standalone_with_cluster',
         mode: schedCfg.mode,
-        ts: new Date().toISOString(),
-      });
+      }));
       throw new Error('[Scheduler] standalone mode is not allowed with cluster enabled');
     }
     ctx.logger.app.warn('[Scheduler] disabled (cluster mode active)');
-    eventBus?.emit('expresto.scheduler.disabled', { reason: 'cluster_enabled', ts: new Date().toISOString() });
+    eventBus?.emit('expresto.scheduler.disabled', createEventPayload('scheduler-startup-hook', { reason: 'cluster_enabled' }));
     return;
   }
 
-  eventBus?.emit('expresto.scheduler.starting', { mode: schedCfg.mode, ts: new Date().toISOString() });
+  eventBus?.emit('expresto.scheduler.starting', createEventPayload('scheduler-startup-hook', { mode: schedCfg.mode }));
   const scheduler = new SchedulerService(schedCfg, ctx);
   ctx.services.set('scheduler', scheduler);
 
@@ -48,16 +48,16 @@ hookManager.on(LifecycleHook.STARTUP, async (ctx: HookContext) => {
   };
 
   await scheduler.init(register);
-  eventBus?.emit('expresto.scheduler.started', { mode: schedCfg.mode, ts: new Date().toISOString() });
+  eventBus?.emit('expresto.scheduler.started', createEventPayload('scheduler-startup-hook', { mode: schedCfg.mode }));
 });
 
 hookManager.on(LifecycleHook.SHUTDOWN, async (ctx: HookContext) => {
   const eventBus = getEventBus(ctx);
   const scheduler = ctx.services.get('scheduler') as SchedulerService | undefined;
   if (scheduler) {
-    eventBus?.emit('expresto.scheduler.stopping', { ts: new Date().toISOString() });
+    eventBus?.emit('expresto.scheduler.stopping', createEventPayload('scheduler-startup-hook'));
     ctx.logger.app.info('[Scheduler] shutting down...');
     scheduler.cancelAll();
-    eventBus?.emit('expresto.scheduler.stopped', { ts: new Date().toISOString() });
+    eventBus?.emit('expresto.scheduler.stopped', createEventPayload('scheduler-startup-hook'));
   }
 });

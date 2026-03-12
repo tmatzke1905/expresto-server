@@ -220,10 +220,16 @@ describe('WebSocketManager', () => {
     expect(connectionHandler).toBeDefined();
     connectionHandler?.(fakeSocket);
 
-    expect(emitSpy).toHaveBeenCalledWith('expresto.websocket.connected', {
-      socketId: 'sock-1',
-      auth: { sub: '123' },
-    });
+    expect(emitSpy).toHaveBeenCalledWith(
+      'expresto.websocket.connected',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'websocket-manager',
+        context: { socketId: 'sock-1', auth: { sub: '123' } },
+        socketId: 'sock-1',
+        auth: { sub: '123' },
+      })
+    );
   });
 
   it('emits expresto.websocket.disconnected with stable payload', () => {
@@ -254,10 +260,16 @@ describe('WebSocketManager', () => {
 
     disconnectHandler?.('client namespace disconnect');
 
-    expect(emitSpy).toHaveBeenCalledWith('expresto.websocket.disconnected', {
-      socketId: 'sock-2',
-      reason: 'client namespace disconnect',
-    });
+    expect(emitSpy).toHaveBeenCalledWith(
+      'expresto.websocket.disconnected',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'websocket-manager',
+        context: { socketId: 'sock-2', reason: 'client namespace disconnect' },
+        socketId: 'sock-2',
+        reason: 'client namespace disconnect',
+      })
+    );
   });
 
   // ------------------------------------------------------------------

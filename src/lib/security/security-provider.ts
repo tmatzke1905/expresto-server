@@ -6,7 +6,7 @@ import type { AppConfig } from '../config';
 import type { HookManager } from '../hooks';
 import { LifecycleHook } from '../hooks';
 import type { ServiceRegistry } from '../services/service-registry';
-import type { EventBus } from '../events';
+import { createEventPayload, type EventBus } from '../events';
 import { verifyToken, type SupportedHmacAlg } from './jwt';
 import { HttpError } from '../errors';
 
@@ -103,6 +103,10 @@ export class SecurityProvider {
     };
   }
 
+  private emitSecurityEvent(event: string, context: Record<string, unknown>): void {
+    this.eventBus?.emit(event, createEventPayload('security-provider', context));
+  }
+
   private async handleRequest(
     req: Request,
     res: Response,
@@ -113,39 +117,60 @@ export class SecurityProvider {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (req as any).routeMeta = meta;
 
-    // Offene Route: keine Authentisierung, aber SECURITY-Hooks können trotzdem lauschen
-    if (meta.mode === 'none') {
-      if (this.hooks && this.services) {
-        await this.hooks.emit(LifecycleHook.SECURITY, {
-          config: this.config,
-          logger: this.logger,
-          services: this.services,
-          eventBus: this.eventBus,
-          request: req,
-        });
+    const reqMeta = {
+      mode: meta.mode,
+      method: req.method,
+      path: req.originalUrl || req.url,
+      route: meta.fullPath,
+      controller: meta.controller,
+    };
+
+    try {
+      // Offene Route: keine Authentisierung, aber SECURITY-Hooks können trotzdem lauschen
+      if (meta.mode === 'none') {
+        if (this.hooks && this.services) {
+          await this.hooks.emit(LifecycleHook.SECURITY, {
+            config: this.config,
+            logger: this.logger,
+            services: this.services,
+            eventBus: this.eventBus,
+            request: req,
+          });
+        }
+      } else {
+        if (meta.mode === 'basic') {
+          await this.handleBasic(req, res);
+        } else if (meta.mode === 'jwt') {
+          await this.handleJwt(req);
+        }
+
+        // Nach erfolgreicher Authentisierung: projektspezifische Checks via SECURITY-Hook
+        if (this.hooks && this.services) {
+          await this.hooks.emit(LifecycleHook.SECURITY, {
+            config: this.config,
+            logger: this.logger,
+            services: this.services,
+            eventBus: this.eventBus,
+            request: req,
+          });
+        }
       }
-      next();
-      return;
-    }
 
-    if (meta.mode === 'basic') {
-      await this.handleBasic(req, res);
-    } else if (meta.mode === 'jwt') {
-      await this.handleJwt(req);
-    }
-
-    // Nach erfolgreicher Authentisierung: projektspezifische Checks via SECURITY-Hook
-    if (this.hooks && this.services) {
-      await this.hooks.emit(LifecycleHook.SECURITY, {
-        config: this.config,
-        logger: this.logger,
-        services: this.services,
-        eventBus: this.eventBus,
-        request: req,
+      this.emitSecurityEvent('expresto.security.authorize', {
+        ...reqMeta,
+        result: 'allowed',
       });
-    }
 
-    next();
+      next();
+    } catch (err) {
+      this.emitSecurityEvent('expresto.security.authorize', {
+        ...reqMeta,
+        result: 'denied',
+        status: err instanceof HttpError ? err.status : undefined,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   private async handleJwt(req: Request): Promise<void> {

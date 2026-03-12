@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { EventBus } from '../../src/lib/events';
+import { createEventPayload, EventBus } from '../../src/lib/events';
 
 describe('EventBus', () => {
   it('emits to exact event listeners (async-first)', async () => {
@@ -80,9 +80,15 @@ describe('EventBus', () => {
 
     const calls: string[] = [];
 
-    const offExact = bus.on('e', () => calls.push('exact'));
-    const offNs = bus.onNamespace('e', () => calls.push('ns'));
-    const offAny = bus.onAny(() => calls.push('any'));
+    const offExact = bus.on('e', () => {
+      calls.push('exact');
+    });
+    const offNs = bus.onNamespace('e', () => {
+      calls.push('ns');
+    });
+    const offAny = bus.onAny(() => {
+      calls.push('any');
+    });
 
     offExact();
     offNs();
@@ -138,5 +144,37 @@ describe('EventBus', () => {
     });
 
     expect(() => bus.emit('boom', null)).not.toThrow();
+  });
+
+  it('supports explicit off(event, handler)', async () => {
+    const bus = new EventBus();
+    const calls: number[] = [];
+    const handler = (payload: number) => {
+      calls.push(payload);
+    };
+
+    bus.on('num', handler);
+    bus.off('num', handler);
+
+    await bus.emitAsync('num', 1);
+    expect(calls).toEqual([]);
+  });
+
+  it('builds standard event payload with source/context and flattened fields', () => {
+    const payload = createEventPayload('unit-test', { id: '42', ok: true });
+
+    expect(payload.ts).toEqual(expect.any(String));
+    expect(payload.source).toBe('unit-test');
+    expect(payload.context).toEqual({ id: '42', ok: true });
+    expect(payload.id).toBe('42');
+    expect(payload.ok).toBe(true);
+  });
+
+  it('builds standard event payload with only ts/source when no context is given', () => {
+    const payload = createEventPayload('unit-test');
+    expect(payload).toEqual({
+      ts: expect.any(String),
+      source: 'unit-test',
+    });
   });
 });

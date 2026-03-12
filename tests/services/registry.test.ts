@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ServiceRegistry } from '../../src/lib/services/service-registry';
 
 describe('ServiceRegistry', () => {
@@ -48,5 +48,40 @@ describe('ServiceRegistry', () => {
     registry.set('dup', v1);
     registry.set('dup', v2);
     expect(registry.get('dup')).toBe(v2);
+  });
+
+  it('emits expresto.services.* events when an EventBus is provided', async () => {
+    const emit = vi.fn();
+    const reg = new ServiceRegistry({ emit } as { emit: (event: string, payload: unknown) => void });
+    const closable = { close: vi.fn().mockResolvedValue(undefined) };
+
+    reg.register('db', closable);
+    reg.set('cache', closable);
+    reg.delete('cache');
+    await reg.shutdownAll();
+
+    expect(emit).toHaveBeenCalledWith(
+      'expresto.services.registered',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'service-registry',
+        name: 'db',
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'expresto.services.shutdown.started',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'service-registry',
+      })
+    );
+    expect(emit).toHaveBeenCalledWith(
+      'expresto.services.shutdown.completed',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'service-registry',
+        serviceCount: 0,
+      })
+    );
   });
 });

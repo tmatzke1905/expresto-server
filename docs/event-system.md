@@ -11,13 +11,38 @@ expRESTo includes an async-first event bus to allow decoupled communication betw
 - `emit()` is **fire-and-forget** (async by default).
 - Use `emitAsync()` only if you explicitly want to await all handlers.
 
+## Stable EventBus API
+
+The framework treats the following methods as stable:
+
+- `on(event, handler)`
+- `off(event, handler)`
+- `emit(event, payload)`
+- `emitAsync(event, payload)`
+
 ## Naming Convention
 
 Use a consistent namespace to avoid collisions.
 
 - Framework events: `expresto.<domain>.<event>`
+  - Common domains: `ops`, `websocket`, `scheduler`, `security`, `services`
   - Example: `expresto.websocket.connected`
 - Project-specific events: `<project>.<domain>.<event>`
+
+## Payload Standard
+
+Framework events should use this base shape:
+
+```ts
+{
+  ts: string;
+  source?: string;
+  context?: object;
+}
+```
+
+In Expresto internals, event-specific fields are currently also kept at top-level
+for backward compatibility with existing consumers.
 
 ## Using the EventBus
 
@@ -81,9 +106,9 @@ await eventBus.emitAsync('myproject.audit.flush', { ts: Date.now() });
 ### WebSocket
 
 - `expresto.websocket.connected`
-  - `{ socketId: string, auth?: unknown }`
+  - `{ ts, source, context, socketId, auth? }`
 - `expresto.websocket.disconnected`
-  - `{ socketId: string, reason: string }`
+  - `{ ts, source, context, socketId, reason }`
 
 ### Scheduler
 
@@ -93,37 +118,54 @@ and emitted asynchronously.
 #### Lifecycle
 
 - `expresto.scheduler.disabled`
-  - `{ reason: string, ts: string }`
+  - `{ ts, source, context, reason }`
 - `expresto.scheduler.starting`
-  - `{ mode: string, ts: string }`
+  - `{ ts, source, context, mode }`
 - `expresto.scheduler.started`
-  - `{ mode: string, ts: string }`
+  - `{ ts, source, context, mode }`
 - `expresto.scheduler.startup_error`
-  - `{ reason: string, mode?: string, ts: string }`
+  - `{ ts, source, context, reason, mode? }`
 - `expresto.scheduler.stopping`
-  - `{ ts: string }`
+  - `{ ts, source }`
 - `expresto.scheduler.stopped`
-  - `{ ts: string }`
+  - `{ ts, source }`
 
 #### Job Execution
 
 - `expresto.scheduler.job.start`
-  - `{ job: string, ts: string }`
+  - `{ ts, source, context, job }`
 - `expresto.scheduler.job.success`
-  - `{ job: string, durationMs: number, ts: string }`
+  - `{ ts, source, context, job, durationMs }`
 - `expresto.scheduler.job.error`
-  - `{ job: string, durationMs: number, error: unknown, ts: string }`
+  - `{ ts, source, context, job, durationMs, error }`
 - `expresto.scheduler.job.skipped`
-  - `{ job: string, reason: string, ts: string }`
+  - `{ ts, source, context, job, reason }`
 
 #### Timeout Jobs
 
 - `expresto.scheduler.timeout.start`
-  - `{ name: string, ts: string }`
+  - `{ ts, source, context, name }`
 - `expresto.scheduler.timeout.success`
-  - `{ name: string, durationMs: number, ts: string }`
+  - `{ ts, source, context, name, durationMs }`
 - `expresto.scheduler.timeout.error`
-  - `{ name: string, durationMs: number, error: unknown, ts: string }`
+  - `{ ts, source, context, name, durationMs, error }`
+
+### Security
+
+- `expresto.security.authorize`
+  - `{ ts, source, context, mode, method, path, route, controller, result, status?, error? }`
+
+### Services
+
+- `expresto.services.registered`
+- `expresto.services.set`
+- `expresto.services.removed`
+- `expresto.services.shutdown.started`
+- `expresto.services.shutdown.success`
+- `expresto.services.shutdown.skipped`
+- `expresto.services.shutdown.error`
+- `expresto.services.shutdown.completed`
+  - all follow `{ ts, source, context, ...eventSpecificFields }`
 
 ## Listener Errors
 
@@ -145,4 +187,4 @@ If nobody subscribes to this error event, the EventBus invokes an optional fallb
 (e.g. wired to the application logger during bootstrap). If no fallback is configured,
 listener errors are silently ignored.
 
-_Last updated: 2026-02-01_
+_Last updated: 2026-03-11_

@@ -52,7 +52,7 @@ Goal: Provide a consistent internal event system used by all modules.
 
 Tasks:
 
-- [ ] Ensure API is stable
+- [x] Ensure API is stable
 
 Required methods:
 
@@ -63,7 +63,7 @@ emit(event, payload)
 emitAsync(event, payload)
 ```
 
-- [ ] Define naming convention
+- [x] Define naming convention
 
 ```
 expresto.*
@@ -73,7 +73,7 @@ expresto.scheduler.*
 expresto.security.*
 ```
 
-- [ ] Define payload standard
+- [x] Define payload standard
 
 ```
 {
@@ -83,7 +83,7 @@ expresto.security.*
 }
 ```
 
-- [ ] Verify EventBus integration in:
+- [x] Verify EventBus integration in:
 
 ```
 ops-controller

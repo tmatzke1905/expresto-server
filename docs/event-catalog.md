@@ -83,8 +83,11 @@ Payload:
 
 ```
 {
+  ts: string
+  source?: string
+  context?: object
   socketId: string
-  userId?: string
+  auth?: unknown
 }
 ```
 
@@ -98,6 +101,9 @@ Payload:
 
 ```
 {
+  ts: string
+  source?: string
+  context?: object
   socketId: string
   reason?: string
 }
@@ -113,6 +119,9 @@ Payload:
 
 ```
 {
+  ts: string
+  source?: string
+  context?: object
   socketId?: string
   error: Error
 }
@@ -131,6 +140,8 @@ Payload:
 ```
 {
   ts: string
+  source?: string
+  context?: object
 }
 ```
 
@@ -144,8 +155,10 @@ Payload:
 
 ```
 {
-  jobId: string
-  cron: string
+  ts: string
+  source?: string
+  context?: object
+  job: string
 }
 ```
 
@@ -159,8 +172,11 @@ Payload:
 
 ```
 {
-  jobId: string
-  duration: number
+  ts: string
+  source?: string
+  context?: object
+  job: string
+  durationMs: number
 }
 ```
 
@@ -174,8 +190,12 @@ Payload:
 
 ```
 {
-  jobId: string
-  error: Error
+  ts: string
+  source?: string
+  context?: object
+  job: string
+  durationMs: number
+  error: unknown
 }
 ```
 
@@ -190,6 +210,8 @@ Payload:
 ```
 {
   ts: string
+  source?: string
+  context?: object
 }
 ```
 
@@ -205,9 +227,17 @@ Payload:
 
 ```
 {
-  userId?: string
-  resource?: string
-  action?: string
+  ts: string
+  source?: string
+  context?: object
+  mode: "none" | "basic" | "jwt"
+  method: string
+  path: string
+  route: string
+  controller: string
+  result: "allowed" | "denied"
+  status?: number
+  error?: string
 }
 ```
 
@@ -217,16 +247,52 @@ Payload:
 
 Operational endpoints may emit events for observability.
 
-### expresto.ops.request
+### expresto.ops.*
 
-Emitted when an ops endpoint is called.
+Operational endpoints emit:
+
+```
+expresto.ops.health_read
+expresto.ops.routes_read
+expresto.ops.config_read
+expresto.ops.config_error
+expresto.ops.logs_read
+expresto.ops.logs_error
+expresto.ops.logs_not_found
+```
+
+All payloads follow:
+
+```
+{
+  ts: string
+  source?: string
+  context?: object
+  ...eventSpecificFields
+}
+```
+
+---
+
+# Service Registry Events
+
+### expresto.services.registered
+### expresto.services.set
+### expresto.services.removed
+### expresto.services.shutdown.started
+### expresto.services.shutdown.success
+### expresto.services.shutdown.skipped
+### expresto.services.shutdown.error
+### expresto.services.shutdown.completed
 
 Payload:
 
 ```
 {
-  endpoint: string
-  method: string
+  ts: string
+  source?: string
+  context?: object
+  ...eventSpecificFields
 }
 ```
 

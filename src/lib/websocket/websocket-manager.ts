@@ -2,7 +2,7 @@ import { Server as HttpServer } from 'node:http';
 import { Server as IOServer, type Socket } from 'socket.io';
 import type { AppConfig, WebsocketConfig } from '../config';
 import type { AppLogger } from '../logger';
-import { EventBus } from '../events';
+import { createEventPayload, EventBus } from '../events';
 import { verifyToken, type SupportedHmacAlg } from '../security/jwt';
 import type { ServiceRegistry } from '../services/service-registry';
 
@@ -102,17 +102,17 @@ export class WebSocketManager {
       // Keep payloads small and stable for consumers.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const s = socket as any;
-      this.eventBus.emit('expresto.websocket.connected', {
+      this.eventBus.emit('expresto.websocket.connected', createEventPayload('websocket-manager', {
         socketId: socket.id,
         auth: s.data?.auth,
-      });
+      }));
 
       socket.on('disconnect', reason => {
         this.logger.app.info(`WebSocket client disconnected: ${socket.id} (${reason})`);
-        this.eventBus.emit('expresto.websocket.disconnected', {
+        this.eventBus.emit('expresto.websocket.disconnected', createEventPayload('websocket-manager', {
           socketId: socket.id,
           reason,
-        });
+        }));
       });
     });
   }
