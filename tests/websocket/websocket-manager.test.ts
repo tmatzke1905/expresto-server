@@ -232,12 +232,13 @@ describe('WebSocketManager', () => {
   // ------------------------------------------------------------------
   it('emits expresto.websocket.connected with stable payload', () => {
     let connectionHandler: ((socket: any) => void) | undefined;
-    const onSpy = vi
-      .spyOn(IOServer.prototype, 'on')
-      .mockImplementation(function (event: any, cb: any) {
-        if (event === 'connection') connectionHandler = cb;
-        return this as any;
-      });
+    const onSpy = vi.spyOn(IOServer.prototype, 'on').mockImplementation(function (
+      event: any,
+      cb: any
+    ) {
+      if (event === 'connection') connectionHandler = cb;
+      return this as any;
+    });
     const emitSpy = vi.spyOn(eventBus, 'emit');
 
     // constructing the manager registers the connection handler
@@ -275,12 +276,13 @@ describe('WebSocketManager', () => {
 
   it('emits expresto.websocket.disconnected with stable payload', () => {
     let connectionHandler: ((socket: any) => void) | undefined;
-    const onSpy = vi
-      .spyOn(IOServer.prototype, 'on')
-      .mockImplementation(function (event: any, cb: any) {
-        if (event === 'connection') connectionHandler = cb;
-        return this as any;
-      });
+    const onSpy = vi.spyOn(IOServer.prototype, 'on').mockImplementation(function (
+      event: any,
+      cb: any
+    ) {
+      if (event === 'connection') connectionHandler = cb;
+      return this as any;
+    });
     const emitSpy = vi.spyOn(eventBus, 'emit');
 
     new WebSocketManager(server, config, logger, eventBus, services);
