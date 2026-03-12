@@ -106,9 +106,19 @@ await eventBus.emitAsync('myproject.audit.flush', { ts: Date.now() });
 ### WebSocket
 
 - `expresto.websocket.connected`
-  - `{ ts, source, context, socketId, auth? }`
+  - `{ ts, source, context, socketId, auth?, socketContext? }`
 - `expresto.websocket.disconnected`
-  - `{ ts, source, context, socketId, reason }`
+  - `{ ts, source, context, socketId, reason, socketContext? }`
+- `expresto.websocket.error`
+  - `{ ts, source, context, stage, reason?, socketId?, requestId?, error? }`
+- `expresto.websocket.message`
+  - `{ ts, source, context, socketId, event, payload, socketContext? }`
+
+Handshake context (attached on socket):
+
+- `socket.context.user`
+- `socket.context.token`
+- `socket.context.requestId`
 
 ### Scheduler
 
@@ -187,4 +197,4 @@ If nobody subscribes to this error event, the EventBus invokes an optional fallb
 (e.g. wired to the application logger during bootstrap). If no fallback is configured,
 listener errors are silently ignored.
 
-_Last updated: 2026-03-11_
+_Last updated: 2026-03-12_

@@ -101,7 +101,7 @@ Goal: Stable real‑time communication layer with EventBus integration.
 
 Tasks:
 
-- [ ] Emit lifecycle events
+- [x] Emit lifecycle events
 
 ```
 expresto.websocket.connected
@@ -110,7 +110,7 @@ expresto.websocket.error
 expresto.websocket.message
 ```
 
-- [ ] Improve handshake context
+- [x] Improve handshake context
 
 Socket context should contain:
 

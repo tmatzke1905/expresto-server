@@ -122,10 +122,11 @@ describe('WebSocketManager', () => {
   // ------------------------------------------------------------------
   it('rejects connection if no token is provided', async () => {
     const useSpy = vi.spyOn(IOServer.prototype, 'use');
+    const emitSpy = vi.spyOn(eventBus, 'emit');
     const manager = new WebSocketManager(server, config, logger, eventBus, services);
 
     expect(useSpy).toHaveBeenCalled();
-    const middleware = useSpy.mock.calls[0][0] as (
+    const middleware = useSpy.mock.calls.at(-1)?.[0] as (
       socket: any,
       next: (err?: Error) => void
     ) => Promise<void> | void;
@@ -139,15 +140,25 @@ describe('WebSocketManager', () => {
     const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(Error);
     expect(err.message).toContain('Unauthorized');
+    expect(emitSpy).toHaveBeenCalledWith(
+      'expresto.websocket.error',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'websocket-manager',
+        stage: 'handshake',
+        reason: 'missing_token',
+      })
+    );
   });
 
   it('rejects connection if JWT is invalid', async () => {
     const useSpy = vi.spyOn(IOServer.prototype, 'use');
+    const emitSpy = vi.spyOn(eventBus, 'emit');
 
     const manager = new WebSocketManager(server, config, logger, eventBus, services);
 
     expect(useSpy).toHaveBeenCalled();
-    const middleware = useSpy.mock.calls[0][0] as (
+    const middleware = useSpy.mock.calls.at(-1)?.[0] as (
       socket: any,
       next: (err?: Error) => void
     ) => Promise<void> | void;
@@ -166,6 +177,15 @@ describe('WebSocketManager', () => {
     const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(Error);
     expect(err?.message).toContain('Forbidden');
+    expect(emitSpy).toHaveBeenCalledWith(
+      'expresto.websocket.error',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'websocket-manager',
+        stage: 'handshake',
+        reason: 'invalid_token',
+      })
+    );
   });
 
   it('accepts connection if JWT is valid', async () => {
@@ -174,7 +194,7 @@ describe('WebSocketManager', () => {
     const manager = new WebSocketManager(server, config, logger, eventBus, services);
 
     expect(useSpy).toHaveBeenCalled();
-    const middleware = useSpy.mock.calls[0][0] as (
+    const middleware = useSpy.mock.calls.at(-1)?.[0] as (
       socket: any,
       next: (err?: Error) => void
     ) => Promise<void> | void;
@@ -184,7 +204,13 @@ describe('WebSocketManager', () => {
       .setProtectedHeader({ alg: 'HS256' })
       .sign(new TextEncoder().encode('test-secret'));
 
-    const fakeSocket: any = { handshake: { auth: { token: validToken } }, data: {} };
+    const fakeSocket: any = {
+      handshake: {
+        auth: { token: validToken },
+        headers: { 'x-request-id': 'req-1' },
+      },
+      data: {},
+    };
     const next = vi.fn();
 
     await Promise.resolve(middleware(fakeSocket, next));
@@ -193,6 +219,12 @@ describe('WebSocketManager', () => {
     expect(next).toHaveBeenCalledWith();
     // and auth payload is attached
     expect(fakeSocket.data.auth).toBeDefined();
+    expect(fakeSocket.data.context).toEqual({
+      user: '123',
+      token: validToken,
+      requestId: 'req-1',
+    });
+    expect(fakeSocket.context).toEqual(fakeSocket.data.context);
   });
 
   // ------------------------------------------------------------------
@@ -213,8 +245,12 @@ describe('WebSocketManager', () => {
 
     const fakeSocket: any = {
       id: 'sock-1',
-      data: { auth: { sub: '123' } },
+      data: {
+        auth: { sub: '123' },
+        context: { user: '123', token: 'tok-1', requestId: 'req-1' },
+      },
       on: vi.fn(),
+      onAny: vi.fn(),
     };
 
     expect(connectionHandler).toBeDefined();
@@ -225,9 +261,14 @@ describe('WebSocketManager', () => {
       expect.objectContaining({
         ts: expect.any(String),
         source: 'websocket-manager',
-        context: { socketId: 'sock-1', auth: { sub: '123' } },
+        context: expect.objectContaining({
+          socketId: 'sock-1',
+          auth: { sub: '123' },
+          socketContext: { user: '123', token: 'tok-1', requestId: 'req-1' },
+        }),
         socketId: 'sock-1',
         auth: { sub: '123' },
+        socketContext: { user: '123', token: 'tok-1', requestId: 'req-1' },
       })
     );
   });
@@ -248,10 +289,14 @@ describe('WebSocketManager', () => {
     let disconnectHandler: ((reason: string) => void) | undefined;
     const fakeSocket: any = {
       id: 'sock-2',
-      data: { auth: { sub: '999' } },
+      data: {
+        auth: { sub: '999' },
+        context: { user: '999', token: 'tok-2', requestId: 'req-2' },
+      },
       on: vi.fn((event: string, cb: (reason: string) => void) => {
         if (event === 'disconnect') disconnectHandler = cb;
       }),
+      onAny: vi.fn(),
     };
 
     expect(connectionHandler).toBeDefined();
@@ -265,9 +310,91 @@ describe('WebSocketManager', () => {
       expect.objectContaining({
         ts: expect.any(String),
         source: 'websocket-manager',
-        context: { socketId: 'sock-2', reason: 'client namespace disconnect' },
+        context: expect.objectContaining({
+          socketId: 'sock-2',
+          reason: 'client namespace disconnect',
+          socketContext: { user: '999', token: 'tok-2', requestId: 'req-2' },
+        }),
         socketId: 'sock-2',
         reason: 'client namespace disconnect',
+        socketContext: { user: '999', token: 'tok-2', requestId: 'req-2' },
+      })
+    );
+  });
+
+  it('emits expresto.websocket.message for incoming socket events', () => {
+    let connectionHandler: ((socket: any) => void) | undefined;
+    vi.spyOn(IOServer.prototype, 'on').mockImplementation(function (event: any, cb: any) {
+      if (event === 'connection') connectionHandler = cb;
+      return this as any;
+    });
+    const emitSpy = vi.spyOn(eventBus, 'emit');
+
+    new WebSocketManager(server, config, logger, eventBus, services);
+
+    let onAnyHandler: ((event: string, ...args: unknown[]) => void) | undefined;
+    const fakeSocket: any = {
+      id: 'sock-msg',
+      data: {
+        auth: { sub: 'm1' },
+        context: { user: 'm1', token: 'tok-msg', requestId: 'req-msg' },
+      },
+      on: vi.fn(),
+      onAny: vi.fn((cb: (event: string, ...args: unknown[]) => void) => {
+        onAnyHandler = cb;
+      }),
+    };
+
+    connectionHandler?.(fakeSocket);
+    onAnyHandler?.('chat.message', { text: 'hello' });
+
+    expect(emitSpy).toHaveBeenCalledWith(
+      'expresto.websocket.message',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'websocket-manager',
+        socketId: 'sock-msg',
+        event: 'chat.message',
+        payload: { text: 'hello' },
+      })
+    );
+  });
+
+  it('emits expresto.websocket.error for socket runtime errors', () => {
+    let connectionHandler: ((socket: any) => void) | undefined;
+    vi.spyOn(IOServer.prototype, 'on').mockImplementation(function (event: any, cb: any) {
+      if (event === 'connection') connectionHandler = cb;
+      return this as any;
+    });
+    const emitSpy = vi.spyOn(eventBus, 'emit');
+
+    new WebSocketManager(server, config, logger, eventBus, services);
+
+    let errorHandler: ((err: unknown) => void) | undefined;
+    const fakeSocket: any = {
+      id: 'sock-err',
+      data: {
+        auth: { sub: 'e1' },
+        context: { user: 'e1', token: 'tok-err', requestId: 'req-err' },
+      },
+      on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
+        if (event === 'error') errorHandler = cb as (err: unknown) => void;
+      }),
+      onAny: vi.fn(),
+    };
+
+    connectionHandler?.(fakeSocket);
+    errorHandler?.(new Error('socket-failed'));
+
+    expect(emitSpy).toHaveBeenCalledWith(
+      'expresto.websocket.error',
+      expect.objectContaining({
+        ts: expect.any(String),
+        source: 'websocket-manager',
+        stage: 'runtime',
+        socketId: 'sock-err',
+        requestId: 'req-err',
+        error: 'socket-failed',
       })
     );
   });

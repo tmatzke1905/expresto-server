@@ -88,6 +88,11 @@ Payload:
   context?: object
   socketId: string
   auth?: unknown
+  socketContext?: {
+    user?: unknown
+    token?: string
+    requestId?: string
+  }
 }
 ```
 
@@ -106,6 +111,11 @@ Payload:
   context?: object
   socketId: string
   reason?: string
+  socketContext?: {
+    user?: unknown
+    token?: string
+    requestId?: string
+  }
 }
 ```
 
@@ -122,8 +132,35 @@ Payload:
   ts: string
   source?: string
   context?: object
+  stage: "handshake" | "runtime"
+  reason?: string
   socketId?: string
-  error: Error
+  requestId?: string
+  error?: string
+}
+```
+
+---
+
+### expresto.websocket.message
+
+Emitted when a custom client message arrives on a socket.
+
+Payload:
+
+```
+{
+  ts: string
+  source?: string
+  context?: object
+  socketId: string
+  event: string
+  payload: unknown
+  socketContext?: {
+    user?: unknown
+    token?: string
+    requestId?: string
+  }
 }
 ```
 

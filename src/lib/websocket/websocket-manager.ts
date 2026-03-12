@@ -35,6 +35,8 @@ export class WebSocketManager {
   private readonly jwtSecret: string;
   private readonly jwtAlgorithm: SupportedHmacAlg;
 
+  private static readonly RESERVED_MESSAGE_EVENTS = new Set(['connect', 'disconnect', 'disconnecting', 'error']);
+
   constructor(
     server: HttpServer,
     config: AppConfig,
@@ -69,13 +71,28 @@ export class WebSocketManager {
   private setup(): void {
     // Authentication middleware: runs on every incoming connection
     this.io.use(async (socket, next) => {
+      const token = this.extractTokenFromHandshake(socket);
+      const requestId = this.extractRequestIdFromHandshake(socket);
+
       if (!this.jwtEnabled) {
+        this.attachSocketContext(socket, {
+          token,
+          requestId,
+          user: undefined,
+        });
         return next();
       }
 
-      const token = this.extractTokenFromHandshake(socket);
       if (!token) {
         this.logger.app.warn('WebSocket connection rejected: missing token');
+        this.eventBus.emit(
+          'expresto.websocket.error',
+          createEventPayload('websocket-manager', {
+            stage: 'handshake',
+            reason: 'missing_token',
+            requestId,
+          })
+        );
         return next(new Error('Unauthorized'));
       }
 
@@ -87,10 +104,24 @@ export class WebSocketManager {
         const s = socket as any;
         s.data = s.data || {};
         s.data.auth = payload;
+        this.attachSocketContext(socket, {
+          token,
+          requestId,
+          user: this.resolveUserFromPayload(payload),
+        });
 
         return next();
       } catch (err) {
         this.logger.app.warn('WebSocket connection rejected: invalid token');
+        this.eventBus.emit(
+          'expresto.websocket.error',
+          createEventPayload('websocket-manager', {
+            stage: 'handshake',
+            reason: 'invalid_token',
+            requestId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        );
         return next(new Error('Forbidden'));
       }
     });
@@ -102,19 +133,73 @@ export class WebSocketManager {
       // Keep payloads small and stable for consumers.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const s = socket as any;
-      this.eventBus.emit('expresto.websocket.connected', createEventPayload('websocket-manager', {
-        socketId: socket.id,
-        auth: s.data?.auth,
-      }));
+      const socketContext = s.data?.context ?? s.context;
+      this.eventBus.emit(
+        'expresto.websocket.connected',
+        createEventPayload('websocket-manager', {
+          socketId: socket.id,
+          auth: s.data?.auth,
+          socketContext,
+        })
+      );
+
+      if (typeof socket.onAny === 'function') {
+        socket.onAny((eventName, ...args) => {
+          if (WebSocketManager.RESERVED_MESSAGE_EVENTS.has(eventName)) return;
+          this.eventBus.emit(
+            'expresto.websocket.message',
+            createEventPayload('websocket-manager', {
+              socketId: socket.id,
+              event: eventName,
+              payload: args.length <= 1 ? args[0] : args,
+              socketContext,
+            })
+          );
+        });
+      }
+
+      socket.on('error', err => {
+        this.eventBus.emit(
+          'expresto.websocket.error',
+          createEventPayload('websocket-manager', {
+            stage: 'runtime',
+            socketId: socket.id,
+            requestId: socketContext?.requestId,
+            error: err instanceof Error ? err.message : String(err),
+            socketContext,
+          })
+        );
+      });
 
       socket.on('disconnect', reason => {
         this.logger.app.info(`WebSocket client disconnected: ${socket.id} (${reason})`);
-        this.eventBus.emit('expresto.websocket.disconnected', createEventPayload('websocket-manager', {
-          socketId: socket.id,
-          reason,
-        }));
+        this.eventBus.emit(
+          'expresto.websocket.disconnected',
+          createEventPayload('websocket-manager', {
+            socketId: socket.id,
+            reason,
+            socketContext,
+          })
+        );
       });
     });
+  }
+
+  private resolveUserFromPayload(payload: unknown): unknown {
+    if (!payload || typeof payload !== 'object') {
+      return undefined;
+    }
+    const data = payload as Record<string, unknown>;
+    return data.user ?? data.username ?? data.sub ?? data.id;
+  }
+
+  private attachSocketContext(socket: Socket, context: { user?: unknown; token?: string; requestId?: string }): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = socket as any;
+    s.data = s.data || {};
+    s.data.context = context;
+    // Expose the same context on `socket.context` for framework conventions.
+    s.context = context;
   }
 
   /**
@@ -145,6 +230,17 @@ export class WebSocketManager {
       return header.slice(7);
     }
 
+    return undefined;
+  }
+
+  private extractRequestIdFromHandshake(socket: Socket): string | undefined {
+    const raw = socket.handshake.headers?.['x-request-id'];
+    if (typeof raw === 'string') {
+      return raw;
+    }
+    if (Array.isArray(raw)) {
+      return typeof raw[0] === 'string' ? raw[0] : undefined;
+    }
     return undefined;
   }
 

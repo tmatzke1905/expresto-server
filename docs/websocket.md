@@ -46,6 +46,28 @@ The same `io` instance is available anywhere after the POST_INIT lifecycle point
 - There is no need to open an additional port
 - CORS and transport configuration can be customized later
 
+## EventBus Integration
+
+The framework emits the following WebSocket events:
+
+- `expresto.websocket.connected`
+- `expresto.websocket.disconnected`
+- `expresto.websocket.error`
+- `expresto.websocket.message`
+
+All follow the standard event payload (`ts`, `source`, `context`) plus
+event-specific fields.
+
+## Handshake Context
+
+After successful auth, the manager attaches a normalized context:
+
+- `socket.context.user`
+- `socket.context.token`
+- `socket.context.requestId`
+
+The same object is also available via `socket.data.context`.
+
 ---
 
 ## Tips
@@ -56,4 +78,4 @@ The same `io` instance is available anywhere after the POST_INIT lifecycle point
 
 ---
 
-_Last updated: 2025-09-14_
+_Last updated: 2026-03-12_
