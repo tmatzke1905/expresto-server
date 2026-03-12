@@ -48,7 +48,6 @@ hookManager.on(LifecycleHook.STARTUP, async (ctx: HookContext) => {
   };
 
   await scheduler.init(register);
-  eventBus?.emit('expresto.scheduler.started', createEventPayload('scheduler-startup-hook', { mode: schedCfg.mode }));
 });
 
 hookManager.on(LifecycleHook.SHUTDOWN, async (ctx: HookContext) => {
@@ -58,6 +57,5 @@ hookManager.on(LifecycleHook.SHUTDOWN, async (ctx: HookContext) => {
     eventBus?.emit('expresto.scheduler.stopping', createEventPayload('scheduler-startup-hook'));
     ctx.logger.app.info('[Scheduler] shutting down...');
     scheduler.cancelAll();
-    eventBus?.emit('expresto.scheduler.stopped', createEventPayload('scheduler-startup-hook'));
   }
 });

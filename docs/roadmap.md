@@ -140,7 +140,7 @@ Goal: Reliable async cron‑based job execution.
 
 Tasks:
 
-- [ ] Emit scheduler events
+- [x] Emit scheduler events
 
 ```
 expresto.scheduler.started
