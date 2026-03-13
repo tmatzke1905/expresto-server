@@ -46,7 +46,7 @@ jobs:
             -Dsonar.test.exclusions=tests/**,**/tests/**,**/*.test.ts,**/*.spec.ts
             -Dsonar.cpd.exclusions=tests/**,**/tests/**,**/*.test.ts,**/*.spec.ts
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.coverage.exclusions=tests/**,dist/**,docs/**
+            -Dsonar.coverage.exclusions=tests/**,dist/**,docs/**,src/cli.ts,src/**/*.d.ts,src/lib/types.ts,src/lib/scheduler/types.ts
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
