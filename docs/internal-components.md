@@ -8,6 +8,14 @@ Expresto framework.
 It is intended for developers who want to understand or extend the framework
 itself.
 
+Status note:
+
+- this file documents internals and design context
+- it may reference roadmap-only concepts that are not part of the supported v1
+  package API
+- for the supported external contract, use `docs/public-api.md` and
+  `docs/framework-contracts.md`
+
 ---
 
 # Overview

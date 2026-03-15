@@ -5,8 +5,7 @@
 This document defines the versioning strategy of the Expresto framework.
 
 The goal is to provide **predictable upgrades**, **stable extension points**,
-and **clear compatibility guarantees** for applications and plugins built on
-Expresto.
+and **clear compatibility guarantees** for applications built on Expresto.
 
 Expresto follows **Semantic Versioning (SemVer)**.
 
@@ -33,7 +32,6 @@ Breaking changes include:
 ```
 removal of public APIs
 changes to framework contracts
-changes to plugin interfaces
 changes to lifecycle hooks
 changes to controller behavior
 changes to EventBus semantics
@@ -63,7 +61,6 @@ new modules
 new configuration options
 new EventBus events
 new hooks
-new plugin capabilities
 performance improvements
 ```
 
@@ -105,44 +102,17 @@ Patch releases must **not change framework behavior in a breaking way**.
 The following components are considered **public API**:
 
 ```
-EventBus API
-Hook system
-ServiceRegistry API
-Controller contract
-Scheduler job contract
-Plugin system interface
-Configuration schema
-WebSocket event contracts
+package root exports documented in docs/public-api.md
+controller contract
+scheduler job contract
+configuration schema
+documented EventBus event contracts
+documented WebSocket event contracts
 ```
 
 Changes to these components must follow the SemVer rules.
 
 Internal implementation details may change at any time.
-
----
-
-# Plugin Compatibility
-
-Plugins should declare compatibility using `peerDependencies`.
-
-Example:
-
-```
-{
-  "name": "expresto-plugin-redis",
-  "peerDependencies": {
-    "expresto": ">=1.0.0 <2.0.0"
-  }
-}
-```
-
-Compatibility expectations:
-
-```
-PATCH updates → always compatible
-MINOR updates → compatible
-MAJOR updates → may require plugin updates
-```
 
 ---
 
@@ -179,6 +149,11 @@ release notes
 migration notes (if required)
 updated documentation
 ```
+
+The planned feature-to-version mapping lives in `docs/releases.md`.
+
+A version must not be declared stable until the example project covers the
+supported feature set of that version from the published package surface.
 
 Release notes should summarize:
 
@@ -238,5 +213,6 @@ clear migration paths for major releases
 stable framework contracts
 ```
 
-This policy protects both application developers and plugin authors from
-unexpected breaking changes.
+This policy protects application developers from unexpected breaking changes.
+
+_Last updated: 2026-03-15_

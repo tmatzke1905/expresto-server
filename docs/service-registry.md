@@ -1,107 +1,69 @@
 # Service Registry
 
-expRESTo provides a lightweight service registry to share initialized resources between hooks, controllers, and other modules.
+The ServiceRegistry is the shared runtime store for infrastructure services
+such as database clients, queues, caches, and route metadata.
 
----
+It is available through hook context as `ctx.services` and is also exported
+from the package root.
 
-## Motivation
+## Typical Usage
 
-Many features (e.g., database drivers, message queues) require early initialization and safe shutdown.
-
-The service registry solves this by:
-
-- Registering services once during the `INITIALIZE` lifecycle phase
-- Making them available to any component via context
-- Supporting graceful shutdown of services with `shutdownAll()`
-- Allowing rollback on startup failure by removing services
-
----
-
-## Usage
-
-### Registering a service in `INITIALIZE`
+Register a service during startup:
 
 ```ts
 import { hookManager, LifecycleHook } from 'expresto';
 
-hookManager.on(LifecycleHook.INITIALIZE, async ctx => {
-  const dbClient = await createPostgresClient(ctx.config.db);
-  ctx.services.set('postgres', dbClient);
+hookManager.on(LifecycleHook.STARTUP, async ctx => {
+  const db = await connectDatabase();
+  ctx.services.set('db', db);
 });
 ```
 
-### Accessing a service later
+Access a service later:
 
 ```ts
-hookManager.on(LifecycleHook.STARTUP, ctx => {
-  const db = ctx.services.get('postgres');
-  // Use db client here
-});
-```
+import { hookManager, LifecycleHook } from 'expresto';
 
-### Graceful shutdown with timeout
-
-```ts
-hookManager.on(LifecycleHook.SHUTDOWN, async ctx => {
-  try {
-    await ctx.services.shutdownAll();
-    // Timeout-Handling übernimmt der zentrale Shutdown in index.ts
-  } catch (error) {
-    console.error('Failed to shutdown all services gracefully:', error);
+hookManager.on(LifecycleHook.POST_INIT, async ctx => {
+  if (ctx.services.has('db')) {
+    const db = ctx.services.get('db');
+    void db;
   }
 });
 ```
 
-### Signal handling (SIGTERM / SIGINT)
+## Supported API
 
-expRESTo integrates signal handling by default.  
-When the process receives `SIGTERM` or `SIGINT`, the framework:
+The stable ServiceRegistry methods in v1 are:
 
-- Logs the shutdown reason
-- Executes all registered `SHUTDOWN` hooks
-- Calls `ctx.services.shutdownAll({ timeoutMs: 30000 })` to terminate services
-- Forces exit if services do not shut down within the timeout
+- `register(name, instance)`
+- `set(name, instance)`
+- `get(name)`
+- `has(name)`
+- `remove(name)`
+- `delete(name)`
+- `list()`
+- `getAll()`
+- `shutdownAll()`
 
-You usually do not need to add this manually, but you can override the behavior if necessary.
+## Shutdown Behavior
 
-### Startup failure rollback
+`shutdownAll()` calls one of these methods on each registered service if
+available:
 
-If service initialization fails, remove partially initialized services to prevent inconsistent state:
+- `shutdown()`
+- `close()`
 
-```ts
-hookManager.on(LifecycleHook.INITIALIZE, async ctx => {
-  try {
-    const cache = await createCacheClient(ctx.config.cache);
-    ctx.services.set('cache', cache);
+If neither method exists, the registry logs a warning and continues.
 
-    const dbClient = await createPostgresClient(ctx.config.db);
-    ctx.services.set('postgres', dbClient);
-  } catch (error) {
-    ctx.services.remove('cache'); // rollback partial setup
-    throw error; // propagate error to abort startup
-  }
-});
-```
+The central runtime already calls `shutdownAll()` during graceful shutdown, so
+applications usually do not need to call it from their own shutdown hooks.
 
----
+## Recommendations
 
-## API
+- Register services under stable, descriptive names
+- Prefer `has()` before `get()` when a service is optional
+- Give long-lived services a `shutdown()` or `close()` method
+- Avoid storing request-scoped values in the registry
 
-The service registry extends a `Map<string, unknown>` with:
-
-- `set(key, value)`
-- `get(key)`
-- `has(key)`
-- `remove(key)` — removes a service explicitly
-- `shutdownAll(options?: { timeoutMs?: number })` — calls `.shutdown()` or `.close()` on services if available, with optional timeout
-- `entries()` — iterate over all registered services
-
-### Important
-
-- Services should expose a `.shutdown()` or `.close()` method for graceful shutdown; otherwise, a warning is logged.
-- Always handle possible missing services using `has()` before `get()`.
-- Avoid circular dependencies between services.
-
----
-
-_Last updated: 2025-09-24_
+_Last updated: 2026-03-15_

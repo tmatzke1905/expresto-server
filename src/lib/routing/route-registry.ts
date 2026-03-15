@@ -10,7 +10,7 @@ export type RegisteredRoute = {
 };
 
 export class RouteRegistry {
-  private routes: RegisteredRoute[] = [];
+  private readonly routes: RegisteredRoute[] = [];
 
   register(entry: RegisteredRoute): void {
     // Normalize: lower-case method, posix style path

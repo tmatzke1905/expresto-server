@@ -4,11 +4,11 @@ import { SchedulerConfig, SchedulerJobConfig, SchedulerModule, HookContext } fro
 import { createEventPayload, type StableEventBus } from '../events';
 
 type Scheduled = {
-  name: string;
-  task: ScheduledTask;
+  readonly name: string;
+  readonly task: ScheduledTask;
   running: boolean; // Reentrancy-Guard
-  module: SchedulerModule;
-  cfg: SchedulerJobConfig;
+  readonly module: SchedulerModule;
+  readonly cfg: SchedulerJobConfig;
 };
 
 type EventBusLike = {
@@ -30,13 +30,13 @@ function serializeError(err: unknown): { name?: string; message: string; stack?:
 }
 
 export class SchedulerService {
-  private tasks = new Map<string, Scheduled>();
-  private tz?: string;
-  private leaderCheck?: () => Promise<boolean> | boolean; // optional external leader election
+  private readonly tasks = new Map<string, Scheduled>();
+  private readonly tz?: string;
+  private readonly leaderCheck?: () => Promise<boolean> | boolean; // optional external leader election
 
   constructor(
-    private cfg: SchedulerConfig,
-    private ctx: HookContext,
+    private readonly cfg: SchedulerConfig,
+    private readonly ctx: HookContext,
     opts?: { leaderCheck?: () => Promise<boolean> | boolean }
   ) {
     this.tz = this.cfg.timezone;

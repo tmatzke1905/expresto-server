@@ -1,58 +1,41 @@
-
-
 # Clustering
 
-expRESTo supports optional clustering using Node.js built-in `cluster` module.
+## Status
 
-This allows you to take advantage of multi-core systems by running multiple worker processes.
+This topic is roadmap-only and is not part of the supported v1 release.
 
----
+expRESTo currently does not implement a full multi-process Node.js cluster
+runtime.
 
-## Enabling Clustering
+## What Exists Today
 
-Clustering can be enabled in the main configuration file:
+The config still reserves:
 
 ```json
-"cluster": {
-  "enabled": true
+{
+  "cluster": {
+    "enabled": true
+  }
 }
 ```
 
-By default, clustering is disabled in container environments, but this behavior can be overridden manually.
+In the current runtime this flag is only used as a deployment signal for the
+scheduler:
 
----
+- attached scheduler startup is skipped when `cluster.enabled === true`
+- `scheduler.mode: "standalone"` together with `cluster.enabled === true`
+  aborts startup
 
-## How It Works
+## What Is Deferred
 
-When clustering is enabled:
+The following are deferred to a later feature package:
 
-- The main process acts as the **master**
-- It spawns one worker per CPU core (or a custom number in future versions)
-- Each worker runs a full instance of the Express app
-- Log messages include the worker PID
+- worker process bootstrap
+- primary/worker lifecycle management
+- multi-worker metrics and ops strategy
+- WebSocket clustering strategy
+- clustered graceful shutdown
 
-Workers share:
+See [docs/roadmap.md](./roadmap.md) for the planned clustering package.
 
-- The same configuration
-- The same controller loading mechanism
-- The same metrics endpoint (aggregated at reverse proxy level)
-
----
-
-## Limitations
-
-- No shared memory between workers
-- Socket.IO does not support clustering out of the box (you must use Redis adapter)
-- Metrics are not aggregated automatically unless done at Prometheus/Grafana level
-
----
-
-## Use Cases
-
-- Horizontal scaling on a single machine
-- Better CPU utilization under load
-- Running dedicated workers per role (future)
-
----
-
-_Last updated: 2025-09-14_
+_Last updated: 2026-03-15_

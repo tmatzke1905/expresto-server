@@ -26,6 +26,63 @@ import {
 import { WebSocketManager } from './lib/websocket/websocket-manager';
 import { opsController } from './core/ops/ops-controller';
 
+export type {
+  AppConfig,
+  AuthConfig,
+  OpsConfig,
+  SchedulerConfig,
+  SchedulerJobConfig,
+  WebsocketConfig,
+} from './lib/config';
+export {
+  EventBus,
+  createEventPayload,
+} from './lib/events';
+export type {
+  AnyEventHandler,
+  EventBusOptions,
+  EventHandler,
+  ListenerErrorPayload,
+  StandardEventPayload,
+  StableEventBus,
+} from './lib/events';
+export {
+  HookManager,
+  hookManager,
+  LifecycleHook,
+} from './lib/hooks';
+export type { HookContext } from './lib/hooks';
+export type { AppLogger } from './lib/logger';
+export {
+  AppError,
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  HttpError,
+  InternalServerError,
+  NotFoundError,
+  UnauthorizedError,
+} from './lib/errors';
+export {
+  ServiceRegistry,
+} from './lib/services/service-registry';
+export {
+  signToken,
+  verifyToken,
+} from './lib/security/jwt';
+export type { SupportedHmacAlg } from './lib/security/jwt';
+export type {
+  SchedulerMode,
+  SchedulerModule,
+} from './lib/scheduler/types';
+export type {
+  ExtHandler,
+  ExtNext,
+  ExtRequest,
+  ExtResponse,
+  SecurityMode,
+} from './lib/types';
+
 let server: import('http').Server | undefined;
 
 type BasicAuthUsers = NonNullable<NonNullable<NonNullable<AppConfig['auth']>['basic']>['users']>;

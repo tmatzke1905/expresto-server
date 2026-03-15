@@ -104,22 +104,22 @@ Goal: Freeze a realistic supported surface for the first release.
 
 Checklist:
 
-- [ ] Decide which features are officially part of v1 and which remain roadmap
+- [x] Decide which features are officially part of v1 and which remain roadmap
       items only.
-- [ ] Export the supported public API explicitly, or reduce the docs to the
+- [x] Export the supported public API explicitly, or reduce the docs to the
       currently exported API.
-- [ ] Remove or clearly mark unsupported features from README and docs
+- [x] Remove or clearly mark unsupported features from README and docs
       (for example plugin system, clustering, `getSocketServer()`, legacy
       lifecycle names, outdated controller signatures).
-- [ ] Align controller examples with the real controller loader contract.
-- [ ] Align service registry and hook examples with the real import surface.
-- [ ] Update `README.md` and all affected docs under `docs/`.
+- [x] Align controller examples with the real controller loader contract.
+- [x] Align service registry and hook examples with the real import surface.
+- [x] Update `README.md` and all affected docs under `docs/`.
 
 Verification:
 
-- [ ] Public API review completed
-- [ ] README updated
-- [ ] Unsupported features either implemented or removed from the release docs
+- [x] Public API review completed
+- [x] README updated
+- [x] Unsupported features either implemented or removed from the release docs
 
 ### Package 5 — Release Verification and Final Gate
 
@@ -145,6 +145,166 @@ Verification:
 - [ ] `npm run coverage`
 - [ ] Release notes drafted
 - [ ] ADRs/doc updates completed where needed
+
+## Deferred Feature Packages (Post-v1)
+
+The following feature areas are intentionally **not** part of the first
+supported production release. They should only be started after Package 5 is
+finished, or once v1 has been explicitly narrowed and shipped.
+
+### Package 6 — Real Clustering Support
+
+Branch: `codex/feature-06-clustering-runtime`
+
+Goal: Turn the current `cluster.enabled` placeholder into a real, supported
+multi-process runtime.
+
+Checklist:
+
+- [ ] Decide the supported cluster model for v2
+      (primary/worker, local multi-core only, or extensible abstraction).
+- [ ] Implement real bootstrap behavior when `cluster.enabled === true` instead
+      of treating the flag only as a scheduler constraint.
+- [ ] Define how ops endpoints, metrics, WebSockets, and scheduler behavior work
+      across workers.
+- [ ] Implement graceful worker shutdown and restart strategy.
+- [ ] Add tests for clustered startup, shutdown, worker lifecycle, and
+      incompatible mode combinations.
+- [ ] Update `docs/clustering.md`, `docs/configuration.md`,
+      `docs/startup-sequence.md`, and relevant WebSocket/scheduler docs.
+
+Verification:
+
+- [ ] Cluster bootstrap works in an automated integration test
+- [ ] Shutdown behavior is documented and tested
+- [ ] Unsupported combinations fail with clear startup errors
+
+### Package 7 — Supported Plugin System
+
+Branch: `codex/feature-07-plugin-system`
+
+Goal: Replace the current design-only plugin documentation with a real,
+supported plugin contract.
+
+Checklist:
+
+- [ ] Decide the minimal supported plugin scope for the first plugin release
+      (services, hooks, controllers, events, config extension).
+- [ ] Extend config/schema with an explicit `plugins` contract if the feature is
+      accepted.
+- [ ] Implement plugin discovery, loading order, error handling, and rollback on
+      startup failure.
+- [ ] Define and export a stable plugin context built only from supported public
+      API primitives.
+- [ ] Add tests for plugin load order, failing plugins, hook participation, and
+      service/controller registration.
+- [ ] Update `docs/plugin-system.md`, `docs/versioning-policy.md`, README, and
+      any public API docs.
+
+Verification:
+
+- [ ] Example plugin loads from config in an integration test
+- [ ] Plugin startup failures abort safely without partial runtime state
+- [ ] Plugin docs describe only implemented behavior
+
+### Package 8 — WebSocket Extension API
+
+Branch: `codex/feature-08-websocket-extension-api`
+
+Goal: Introduce a deliberate developer-facing WebSocket extension surface, or
+explicitly document why it stays internal.
+
+Checklist:
+
+- [ ] Decide whether a public accessor such as `getSocketServer()` is actually
+      part of the supported API.
+- [ ] If supported, export a stable runtime access pattern for Socket.IO after
+      server startup.
+- [ ] Define timing rules for when the WebSocket server is available and how
+      non-listening or test runtimes should behave.
+- [ ] Add tests for access before/after startup, auth context propagation, and
+      custom event registration.
+- [ ] Update `docs/websocket.md`, README, and public API docs to match the
+      chosen contract.
+
+Verification:
+
+- [ ] Public WebSocket access is covered by tests or explicitly documented as unsupported
+- [ ] No docs mention private/internal access patterns anymore
+
+### Package 9 — Scheduler Reliability Extensions
+
+Branch: `codex/feature-09-scheduler-reliability`
+
+Goal: Add the operational controls needed for more demanding background job
+workloads.
+
+Checklist:
+
+- [ ] Extend the scheduler config/schema for per-job timeout, retry, and backoff
+      behavior.
+- [ ] Implement timeout handling and retry execution with clear event emission.
+- [ ] Define a leader-election or lock-provider contract for multi-instance job
+      coordination.
+- [ ] Add tests for timeout expiry, retry exhaustion, backoff behavior, and
+      leader-only execution.
+- [ ] Update `docs/scheduler.md`, `docs/configuration.md`, and event
+      documentation.
+
+Verification:
+
+- [ ] Timeout and retry behavior is deterministic in tests
+- [ ] Scheduler events cover new reliability outcomes
+- [ ] Multi-instance coordination is either implemented or explicitly deferred
+
+### Package 10 — Ops and Health Maturity
+
+Branch: `codex/feature-10-ops-health-observability`
+
+Goal: Evolve ops endpoints from basic diagnostics into a production-ready
+observability surface.
+
+Checklist:
+
+- [ ] Define a health contributor contract for services and infrastructure
+      dependencies.
+- [ ] Add readiness/liveness detail and dependency status reporting without
+      exposing secrets.
+- [ ] Decide whether runtime log-level changes are supported; implement or
+      remove the idea from docs.
+- [ ] Extend metrics and ops documentation with the final production policy.
+- [ ] Add tests for authenticated ops access, redaction, dependency health, and
+      any mutating ops endpoints.
+
+Verification:
+
+- [ ] Health output is stable and documented
+- [ ] Protected ops behavior remains fail-closed
+- [ ] Observability docs match the real endpoint surface
+
+### Package 11 — Example App and Integration Starter
+
+Branch: `codex/feature-11-example-app-starter`
+
+Goal: Give adopters a realistic reference project for the supported v1 API and
+follow-up integrations.
+
+Checklist:
+
+- [ ] Create a small example app that consumes the published package only, not
+      repo-internal imports.
+- [ ] Demonstrate the supported controller contract, auth, ops, scheduler, and
+      optional WebSocket setup.
+- [ ] Decide whether the database facade belongs inside this repository or as a
+      companion project; document the decision.
+- [ ] Add smoke checks for the example app startup path and basic requests.
+- [ ] Update README and docs to point new users to the example.
+
+Verification:
+
+- [ ] Example app runs from the packaged API surface
+- [ ] Docs reference the example as the canonical starting point
+- [ ] Integration guidance no longer depends on private repo structure
 
 ### Recommended Merge Order
 

@@ -7,6 +7,14 @@ This document provides a high-level overview of the Expresto framework architect
 It is intended to help developers quickly understand how the core components interact
 and how requests, events, and services flow through the system.
 
+Status note:
+
+- this is a background architecture document, not the source of truth for the
+  supported npm API
+- it may mention roadmap ideas or historical hook names
+- use `docs/public-api.md`, `docs/framework-contracts.md`, and
+  `docs/lifecycle-hooks.md` for the supported v1 runtime contract
+
 ---
 
 # Core Concepts

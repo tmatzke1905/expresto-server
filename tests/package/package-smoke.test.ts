@@ -139,12 +139,24 @@ describe('published package smoke test', () => {
 const pkg = require('expresto');
 const schemaPath = require.resolve('expresto/middleware.config.schema.json');
 (async () => {
+  pkg.hookManager.on(pkg.LifecycleHook.INITIALIZE, (ctx) => {
+    ctx.services.set('fromPublicHook', { shutdown: async () => {} });
+  });
+  const token = await pkg.signToken({ sub: 'demo-user' }, 'super-secret', 'HS256');
+  const decoded = await pkg.verifyToken(token, 'super-secret', 'HS256');
   const runtime = await pkg.createServer('./middleware.config.prod.json');
   console.log(JSON.stringify({
     exports: Object.keys(pkg),
     hasCreateServer: typeof pkg.createServer === 'function',
+    hasHookManager: typeof pkg.hookManager?.on === 'function',
+    hasLifecycleHook: typeof pkg.LifecycleHook?.INITIALIZE === 'string',
+    hasEventBus: typeof pkg.EventBus === 'function',
+    hasServiceRegistry: typeof pkg.ServiceRegistry === 'function',
+    hasHttpError: typeof pkg.HttpError === 'function',
     hasApp: typeof runtime.app?.use === 'function',
-    schemaReadable: require('node:fs').existsSync(schemaPath)
+    schemaReadable: require('node:fs').existsSync(schemaPath),
+    hookServiceRegistered: runtime.services.has('fromPublicHook'),
+    decodedSub: decoded.sub
   }));
 })().catch(err => {
   console.error(err);
@@ -156,14 +168,35 @@ const schemaPath = require.resolve('expresto/middleware.config.schema.json');
         const requireResult = JSON.parse(requireOutput) as {
           exports: string[];
           hasCreateServer: boolean;
+          hasHookManager: boolean;
+          hasLifecycleHook: boolean;
+          hasEventBus: boolean;
+          hasServiceRegistry: boolean;
+          hasHttpError: boolean;
           hasApp: boolean;
           schemaReadable: boolean;
+          hookServiceRegistered: boolean;
+          decodedSub: string;
         };
 
         expect(requireResult.exports).toContain('createServer');
+        expect(requireResult.exports).toContain('hookManager');
+        expect(requireResult.exports).toContain('LifecycleHook');
+        expect(requireResult.exports).toContain('EventBus');
+        expect(requireResult.exports).toContain('ServiceRegistry');
+        expect(requireResult.exports).toContain('HttpError');
+        expect(requireResult.exports).toContain('signToken');
+        expect(requireResult.exports).toContain('verifyToken');
         expect(requireResult.hasCreateServer).toBe(true);
+        expect(requireResult.hasHookManager).toBe(true);
+        expect(requireResult.hasLifecycleHook).toBe(true);
+        expect(requireResult.hasEventBus).toBe(true);
+        expect(requireResult.hasServiceRegistry).toBe(true);
+        expect(requireResult.hasHttpError).toBe(true);
         expect(requireResult.hasApp).toBe(true);
         expect(requireResult.schemaReadable).toBe(true);
+        expect(requireResult.hookServiceRegistered).toBe(true);
+        expect(requireResult.decodedSub).toBe('demo-user');
 
         const importOutput = run(
           'node',
@@ -173,7 +206,14 @@ const schemaPath = require.resolve('expresto/middleware.config.schema.json');
             `const pkg = await import('expresto');
 console.log(JSON.stringify({
   exports: Object.keys(pkg),
-  hasCreateServer: typeof pkg.createServer === 'function'
+  hasCreateServer: typeof pkg.createServer === 'function',
+  hasHookManager: typeof pkg.hookManager?.on === 'function',
+  hasLifecycleHook: typeof pkg.LifecycleHook?.INITIALIZE === 'string',
+  hasEventBus: typeof pkg.EventBus === 'function',
+  hasServiceRegistry: typeof pkg.ServiceRegistry === 'function',
+  hasHttpError: typeof pkg.HttpError === 'function',
+  hasSignToken: typeof pkg.signToken === 'function',
+  hasVerifyToken: typeof pkg.verifyToken === 'function'
 }));`,
           ],
           consumerDir
@@ -181,10 +221,31 @@ console.log(JSON.stringify({
         const importResult = JSON.parse(importOutput) as {
           exports: string[];
           hasCreateServer: boolean;
+          hasHookManager: boolean;
+          hasLifecycleHook: boolean;
+          hasEventBus: boolean;
+          hasServiceRegistry: boolean;
+          hasHttpError: boolean;
+          hasSignToken: boolean;
+          hasVerifyToken: boolean;
         };
 
         expect(importResult.exports).toContain('createServer');
+        expect(importResult.exports).toContain('hookManager');
+        expect(importResult.exports).toContain('LifecycleHook');
+        expect(importResult.exports).toContain('EventBus');
+        expect(importResult.exports).toContain('ServiceRegistry');
+        expect(importResult.exports).toContain('HttpError');
+        expect(importResult.exports).toContain('signToken');
+        expect(importResult.exports).toContain('verifyToken');
         expect(importResult.hasCreateServer).toBe(true);
+        expect(importResult.hasHookManager).toBe(true);
+        expect(importResult.hasLifecycleHook).toBe(true);
+        expect(importResult.hasEventBus).toBe(true);
+        expect(importResult.hasServiceRegistry).toBe(true);
+        expect(importResult.hasHttpError).toBe(true);
+        expect(importResult.hasSignToken).toBe(true);
+        expect(importResult.hasVerifyToken).toBe(true);
       } finally {
         fs.rmSync(packageWorkDir, { recursive: true, force: true });
       }

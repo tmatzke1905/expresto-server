@@ -1,77 +1,59 @@
-
-
 # Controllers
 
-Controllers in expRESTo are self-contained modules that define one or more HTTP endpoints (routes). Each controller:
+The stable v1 controller contract in expRESTo is a default export with a
+`route` string and a `handlers` array.
 
-- Exports an `init(app, logger)` function
-- Uses an `express.Router` instance to define its routes
-- Can optionally declare if routes require authentication
-- Is dynamically loaded from the configured `controllersPath` folder
-
----
-
-## Controller Interface
-
-A valid controller file exports:
+## Supported Controller Shape
 
 ```ts
-export function init(app: Express, logger: Logger): void {
-  const router = express.Router();
+import type { ExtRequest, ExtResponse } from 'expresto';
 
-  router.get('/ping', handlePing);       // ➝ GET /api/ping
-  router.post('/login', handleLogin);    // ➝ POST /api/login
-
-  app.use('/api', router);
-}
+export default {
+  route: '/users',
+  handlers: [
+    {
+      method: 'get',
+      path: '/',
+      secure: 'jwt',
+      handler: (_req: ExtRequest, res: ExtResponse) => {
+        res.json([{ id: '1', name: 'Ada' }]);
+      },
+    },
+  ],
+};
 ```
 
-> The base path `/api` is defined by `contextRoot` in the configuration.
+## Handler Fields
 
----
+Each entry in `handlers` supports:
 
-## Handler Functions
+- `method`: `get`, `post`, `put`, `delete`, `patch`, or `options`
+- `path`: route path inside the controller route
+- `secure`: `false`, `true`, `'jwt'`, or `'basic'`
+- `handler`: Express-compatible request handler
+- `middlewares`: optional array of additional middleware handlers
 
-Each handler must match the standard Express signature:
+The final route path is built from:
 
-```ts
-function handlePing(req: Request, res: Response): void {
-  res.json({ message: 'pong' });
-}
-```
+- `contextRoot`
+- controller `route`
+- handler `path`
 
-Handlers can also be referenced functions, declared in the same file or imported from another module.
+## Security Behavior
 
----
+- `secure: false` means public
+- `secure: true` is treated as JWT-protected
+- `secure: 'jwt'` requires working JWT auth
+- `secure: 'basic'` requires working Basic Auth
 
-## Logging
+Protected routes fail closed when the required auth mode is unavailable.
 
-Controllers receive a `logger` instance from the middleware:
+## What Is Not Part of the Stable v1 Contract
 
-```ts
-logger.debug('Ping controller loaded');
-```
+The controller loader currently also accepts an advanced `init(router, logger,
+security)` form, but that signature is not part of the documented v1 contract.
 
-This logger writes to `application.log`, based on the configured log level.
+For package consumers, the recommended and supported authoring format is the
+default export object shown above.
 
----
-
-## Security
-
-Controllers do not enforce security directly. Instead:
-
-- Security is declared per route using route metadata or conventions
-- The middleware's `SecurityProvider` validates access before the handler is called
-- Security modes include `jwt`, `basic`, or `none`
-
----
-
-## Dynamic Controller Loading
-
-All controller files are loaded automatically from the `controllersPath` configured in the main JSON config.
-
-Each controller is expected to export an `init()` function — otherwise it will be skipped with a warning.
-
----
-
-_Last updated: 2025-09-14_
+_Last updated: 2026-03-15_

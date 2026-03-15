@@ -46,12 +46,12 @@ type ControllerModule = SimpleController | AdvancedController;
  */
 export class ControllerLoader {
   private readonly routeRegistry = new RouteRegistry();
-  private registered: ControllerRouteInfo[] = [];
+  private readonly registered: ControllerRouteInfo[] = [];
 
   constructor(
-    private controllerPath: string,
-    private logger: AppLogger,
-    private security: SecurityProvider
+    private readonly controllerPath: string,
+    private readonly logger: AppLogger,
+    private readonly security: SecurityProvider
   ) {}
 
   private isControllerModuleFile(file: string): boolean {

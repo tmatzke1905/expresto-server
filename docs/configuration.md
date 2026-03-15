@@ -77,7 +77,7 @@ Node.js 22.
 | `auth.basic.users` | Username/password map or array of `{ username, password }` |
 | `ops.enabled` | Defaults to enabled unless explicitly set to `false` |
 | `ops.secure` | `none`, `basic`, or `jwt` |
-| `cluster.enabled` | Enables clustered runtime mode |
+| `cluster.enabled` | Reserved deployment hint for future clustering work; today it only affects scheduler behavior |
 | `scheduler.enabled` | Enables the scheduler bootstrap |
 | `scheduler.mode` | `attached` or `standalone` |
 | `scheduler.timezone` | Default timezone for cron jobs |
@@ -102,6 +102,8 @@ Node.js 22.
   startup path. It is rejected if `cluster.enabled` is also `true`.
 - With `cluster.enabled: true`, attached scheduler startup is skipped and emits
   `expresto.scheduler.disabled`.
+- expRESTo v1 does not implement a full Node.js cluster runtime yet, even
+  though the config shape reserves `cluster.enabled`.
 
 ## Security-Sensitive Rules
 

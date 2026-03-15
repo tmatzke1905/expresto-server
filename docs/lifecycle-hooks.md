@@ -45,10 +45,10 @@ Hook handlers receive a `HookContext` with:
 
 ## Registering a Hook
 
-The hook API currently lives in `src/lib/hooks.ts`:
+The supported hook API is exported from the package root:
 
 ```ts
-import { hookManager, LifecycleHook, type HookContext } from '../src/lib/hooks';
+import { hookManager, LifecycleHook, type HookContext } from 'expresto';
 
 hookManager.on(LifecycleHook.STARTUP, async (ctx: HookContext) => {
   ctx.services.set('db', await connectDatabase());

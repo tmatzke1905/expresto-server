@@ -44,7 +44,7 @@ this:
 Each job module must export:
 
 ```ts
-import type { SchedulerModule } from '../src/lib/scheduler/types';
+import type { SchedulerModule } from 'expresto';
 
 const cleanupJob: SchedulerModule = {
   id: 'cleanup',
