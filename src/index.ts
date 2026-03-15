@@ -273,14 +273,20 @@ export async function createServer(configInput: string | AppConfig) {
   return { app, config, logger, hookManager, eventBus, services };
 }
 
+const isDirectExecution =
+  typeof require !== 'undefined' &&
+  typeof module !== 'undefined' &&
+  require.main === module;
+
 // Allow direct execution as CLI
 // This check ensures the server only starts automatically
 // when this file is executed directly via `node`, and not when imported as a module.
-if (require.main === module) {
+if (isDirectExecution) {
   // sonar-ignore-next-line typescript:S7785
   (async () => {
+    const configPath = process.argv[2] || './middleware.config.json';
     const { app, config, logger, eventBus, services } = await createServer(
-      './middleware.config.json'
+      configPath
     );
 
     if (config.scheduler?.enabled && config.scheduler?.mode === 'standalone') {

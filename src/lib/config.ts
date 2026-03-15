@@ -1,24 +1,19 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ValidateFunction } from 'ajv';
-import Ajv2020 from 'ajv/dist/2020';
+import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
+import middlewareConfigSchema from '../../middleware.config.schema.json';
 
 let validate: ValidateFunction | null = null;
 
 async function getValidator(): Promise<ValidateFunction> {
   if (validate) return validate;
 
-  const file = await fs.readFile(
-    path.resolve(__dirname, '../../middleware.config.schema.json'),
-    'utf-8'
-  );
-  const schema = JSON.parse(file);
-
   const ajv = new Ajv2020({ allErrors: true });
   addFormats(ajv);
 
-  validate = ajv.compile(schema);
+  validate = ajv.compile(middlewareConfigSchema);
   return validate;
 }
 

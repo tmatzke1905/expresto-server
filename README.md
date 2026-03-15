@@ -35,10 +35,12 @@ npm install
 2. Run the application
 
 ```bash
+npm run build
 npm start
 ```
 
-3. Configuration is loaded from `config/config.json`.
+3. Configuration is loaded from the first CLI argument. If no argument is
+provided, the runtime falls back to `./middleware.config.json`.
 
 ### Development vs Production Config
 
@@ -51,10 +53,17 @@ When starting the application, you can specify which config file to load:
 
 ```bash
 # Development
-npm start -- ./middleware.config.json
+npm run start:dev -- ./middleware.config.json
 
 # Production
-npm start -- ./middleware.config.prod.json
+npm run start:prod -- ./middleware.config.prod.json
+```
+
+When using the published npm package without cloning this repository, call the
+built entry directly:
+
+```bash
+node ./node_modules/expresto/dist/index.js ./middleware.config.prod.json
 ```
 
 ---

@@ -1,19 +1,167 @@
 # Current Focus
 
-Current development focus:
+## Release Readiness Packages
 
+For the first production-ready release, work through the following packages in
+order. Each package should be implemented in a dedicated branch and should not
+be split across multiple branches unless explicitly required.
 
-1. EventBus stabilization
-2. Scheduler events
-3. WebSocket events
+Execution rule for release work:
+
+- Finish one package completely before starting the next.
+- Keep code changes, tests, and documentation updates in the same branch.
+- Merge only after the listed verification steps are green.
+- If scope needs to be reduced, update README and `docs/` in the same package.
+
+### Package 1 — Packaging and Publishability
+
+Branch: `codex/release-01-packaging`
+
+Goal: Make the published package installable, importable, and runnable without
+repo-local files.
+
+Checklist:
+
+- [ ] Fix `main`, `module`, `exports`, and `start:*` scripts so they match the
+      actual build outputs in `dist/`.
+- [ ] Ensure all runtime-required files are included in the published package
+      (for example `middleware.config.schema.json` and other kept runtime
+      assets).
+- [ ] Add a packaging smoke test covering `npm pack --dry-run` and a real
+      `require()` / `import()` check against the packed output.
+- [ ] Verify the package can validate config without relying on the repository
+      root.
+- [ ] Update README quick start and packaging notes to match the real startup
+      paths and config file names.
+
+Verification:
+
+- [ ] `npm run build`
+- [ ] Packaging smoke test passes
+- [ ] README updated
+
+### Package 2 — Security Hardening
+
+Branch: `codex/release-02-security-hardening`
+
+Goal: Make all protected paths fail closed and remove insecure defaults.
+
+Checklist:
+
+- [ ] Make `secure: 'jwt'` reject requests when JWT is disabled or not
+      configured.
+- [ ] Make `secure: 'basic'` reject requests when Basic Auth is disabled or not
+      configured.
+- [ ] Remove default JWT secrets and fail startup on insecure auth
+      configuration.
+- [ ] Apply the same hardening rules to WebSocket authentication.
+- [ ] Decide how ops endpoints are protected in production
+      (disabled-by-config, auth-protected, or both).
+- [ ] Add regression tests for negative auth paths and insecure config startup
+      failures.
+- [ ] Update `docs/security.md`, `docs/websocket.md`, and relevant config docs.
+
+Verification:
+
+- [ ] `npm test -- --run`
+- [ ] Security regression tests added and passing
+- [ ] Security docs updated
+
+### Package 3 — Runtime Wiring and Config Contract
+
+Branch: `codex/release-03-runtime-contract`
+
+Goal: Ensure the runtime behavior matches the documented configuration and
+startup lifecycle.
+
+Checklist:
+
+- [ ] Wire scheduler bootstrap into the normal server startup path instead of
+      relying on an unimported side-effect module.
+- [ ] Add an integration test proving scheduler startup via `createServer()`.
+- [ ] Make `cors.enabled`, `helmet.enabled`, and any other documented config
+      flags behave consistently.
+- [ ] Decide whether `metrics.enabled` is supported; implement it or remove it
+      from the contract.
+- [ ] Review lifecycle hook names and startup order for consistency between code
+      and docs.
+- [ ] Update `docs/configuration.md`, `docs/lifecycle-hooks.md`,
+      `docs/startup-sequence.md`, and `docs/scheduler.md`.
+
+Verification:
+
+- [ ] `npm test -- --run`
+- [ ] Runtime integration tests passing
+- [ ] Configuration and lifecycle docs updated
+
+### Package 4 — Supported v1 Scope and Public API
+
+Branch: `codex/release-04-v1-scope-api`
+
+Goal: Freeze a realistic supported surface for the first release.
+
+Checklist:
+
+- [ ] Decide which features are officially part of v1 and which remain roadmap
+      items only.
+- [ ] Export the supported public API explicitly, or reduce the docs to the
+      currently exported API.
+- [ ] Remove or clearly mark unsupported features from README and docs
+      (for example plugin system, clustering, `getSocketServer()`, legacy
+      lifecycle names, outdated controller signatures).
+- [ ] Align controller examples with the real controller loader contract.
+- [ ] Align service registry and hook examples with the real import surface.
+- [ ] Update `README.md` and all affected docs under `docs/`.
+
+Verification:
+
+- [ ] Public API review completed
+- [ ] README updated
+- [ ] Unsupported features either implemented or removed from the release docs
+
+### Package 5 — Release Verification and Final Gate
+
+Branch: `codex/release-05-verification`
+
+Goal: Close the release with a reproducible verification pass.
+
+Checklist:
+
+- [ ] Add end-to-end smoke checks for package import, secure route behavior, ops
+      endpoint policy, and scheduler startup.
+- [ ] Run the full validation suite: build, tests, and coverage.
+- [ ] Review open roadmap items and explicitly move non-v1 work into later
+      feature releases.
+- [ ] Prepare concise release notes for the first supported release.
+- [ ] If architectural behavior changed materially, add/update ADR entries in
+      `docs/design-decisions.md`.
+
+Verification:
+
+- [ ] `npm run build`
+- [ ] `npm test -- --run`
+- [ ] `npm run coverage`
+- [ ] Release notes drafted
+- [ ] ADRs/doc updates completed where needed
+
+### Recommended Merge Order
+
+1. `codex/release-01-packaging`
+2. `codex/release-02-security-hardening`
+3. `codex/release-03-runtime-contract`
+4. `codex/release-04-v1-scope-api`
+5. `codex/release-05-verification`
+
 
 ## Agent Execution Order
 
 Coding agents should implement the current focus areas in the following order:
 
-1. EventBus stabilization
-2. Scheduler events
-3. WebSocket events
+1. Packaging and Publishability
+2. Security Hardening
+3. Runtime Wiring and Config Contract
+4. Supported v1 Scope and Public API
+5. Release Verification and Final Gate
 
 Execution rules:
 
@@ -28,6 +176,9 @@ Execution rules:
 
 This roadmap is written for both humans and coding agents (Codex, etc.).
 Each task should be implemented without breaking existing public APIs unless explicitly stated.
+The release packages above define the short-term execution order for the first
+production-ready release; the thematic sections below remain the longer-term
+backlog.
 
 ---
 

@@ -12,6 +12,7 @@ export default defineConfig({
       exclude: [
         '**/tests/**',
         '**/node_modules/**',
+        'middleware.config.schema.json',
         'src/cli.ts',
         'src/**/*.d.ts',
         'src/lib/types.ts',
