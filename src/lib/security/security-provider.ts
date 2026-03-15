@@ -1,6 +1,6 @@
 // src/lib/security/security-provider.ts
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import type { AppLogger } from '../logger';
 import type { AppConfig } from '../config';
 import type { HookManager } from '../hooks';

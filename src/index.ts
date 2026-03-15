@@ -83,7 +83,7 @@ export type {
   SecurityMode,
 } from './lib/types';
 
-let server: import('http').Server | undefined;
+let server: import('node:http').Server | undefined;
 
 type BasicAuthUsers = NonNullable<NonNullable<NonNullable<AppConfig['auth']>['basic']>['users']>;
 type Log4jsWithShutdown = typeof log4js & { shutdown?: (callback: () => void) => void };

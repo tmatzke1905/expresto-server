@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { loadConfig } from './lib/config';
 
-async function validateConfig(pathArg?: string) {
-  const configPath = pathArg || './middleware.config.json';
+async function validateConfig(configPath = './middleware.config.json') {
   try {
     await loadConfig(configPath);
     process.stdout.write(`Configuration at '${configPath}' is valid.\n`);
