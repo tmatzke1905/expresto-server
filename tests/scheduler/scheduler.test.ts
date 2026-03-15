@@ -5,6 +5,19 @@ import type { SchedulerModule } from '../../src/lib/scheduler/types';
 import dummyJob from '../jobs/dummy.job';
 import { vi } from 'vitest';
 
+const activeSchedulers: SchedulerService[] = [];
+
+function trackScheduler(scheduler: SchedulerService): SchedulerService {
+  activeSchedulers.push(scheduler);
+  return scheduler;
+}
+
+afterEach(async () => {
+  await Promise.allSettled(activeSchedulers.map(scheduler => scheduler.shutdown()));
+  activeSchedulers.length = 0;
+  dummyJob.reset();
+});
+
 describe('Scheduler', () => {
   beforeAll(async () => {
     await initConfig('./tests/config/scheduler.json');
@@ -22,7 +35,7 @@ describe('Scheduler', () => {
     };
 
     const schedCfg = ctx.config.scheduler;
-    const scheduler = new SchedulerService(schedCfg, ctx);
+    const scheduler = trackScheduler(new SchedulerService(schedCfg, ctx));
     ctx.services.set('scheduler', scheduler);
 
     const register = async (): Promise<SchedulerModule> => dummyJob;
@@ -62,7 +75,7 @@ describe('Scheduler', () => {
     };
 
     const schedCfg = ctx.config.scheduler;
-    const scheduler = new SchedulerService(schedCfg, ctx);
+    const scheduler = trackScheduler(new SchedulerService(schedCfg, ctx));
     ctx.services.set('scheduler', scheduler);
 
     const register = async (): Promise<SchedulerModule> => dummyJob;
@@ -96,6 +109,7 @@ describe('Scheduler', () => {
         } as any,
         ctx
       );
+      trackScheduler(scheduler);
 
       scheduler.scheduleTimeout('evt-check', async () => {}, 10);
       await vi.advanceTimersByTimeAsync(20);
@@ -149,7 +163,7 @@ it('should run in standalone mode without HTTP server', async () => {
   };
 
   const schedCfg = ctx.config.scheduler;
-  const scheduler = new SchedulerService(schedCfg, ctx);
+  const scheduler = trackScheduler(new SchedulerService(schedCfg, ctx));
   ctx.services.set('scheduler', scheduler);
 
   const register = async (): Promise<SchedulerModule> => dummyJob;
