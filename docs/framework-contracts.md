@@ -1,384 +1,134 @@
 # Expresto Framework Contracts
 
-This document defines the core **runtime contracts** of the Expresto framework.
+This document defines the supported v1 runtime contracts for expRESTo.
 
-Contracts describe the **stable interfaces between framework components**.
+For the exact package root exports, see [public-api.md](./public-api.md).
 
-They are important for:
+## Stable Contract Areas
 
-- preventing breaking changes
-- enabling plugin development
-- allowing safe internal refactoring
-- documenting extension points
+The supported contracts in v1 are:
 
-Every contract described here should be considered **stable API** unless explicitly marked otherwise.
+- package root exports documented in `docs/public-api.md`
+- JSON configuration schema
+- controller module contract
+- hook system contract
+- EventBus contract
+- ServiceRegistry contract
+- scheduler job contract
+- documented framework events
 
----
+## EventBus Contract
 
-# Contract Categories
+Stable methods:
 
-Expresto exposes the following core runtime contracts:
+- `on(event, handler)`
+- `off(event, handler)`
+- `emit(event, payload)`
+- `emitAsync(event, payload)`
 
-```
-EventBus Contract
-Hook System Contract
-ServiceRegistry Contract
-Controller Contract
-Scheduler Job Contract
-WebSocket Event Contract
-Configuration Contract
-```
+Execution guarantees:
 
-Each contract defines:
+- exact event listeners run first
+- namespace listeners run next
+- wildcard listeners run last
+- listener execution order is stable by registration
 
-- responsibilities
-- expected interfaces
-- stability guarantees
+Framework event names follow:
 
----
-
-# EventBus Contract
-
-Location:
-
-```
-src/lib/events.ts
-```
-
-The EventBus enables asynchronous communication between modules.
-
-## Required API
-
-```
-on(event: string, handler: EventHandler): void
-off(event: string, handler: EventHandler): void
-emit(event: string, payload?: unknown): void
-emitAsync(event: string, payload?: unknown): Promise<void>
-```
-
-## Handler Contract
-
-Handlers must support asynchronous execution.
-
-```
-type EventHandler = (payload?: unknown) => void | Promise<void>
-```
-
-## Execution Guarantees
-
-- handlers are executed in registration order
-- `emit()` does not wait for handlers
-- `emitAsync()` waits for all handlers
-
-## Event Naming
-
-Event names must follow this pattern:
-
-```
+```txt
 expresto.<domain>.<event>
 ```
 
-Example:
+## Hook System Contract
 
-```
-expresto.websocket.connected
-expresto.scheduler.job.success
-```
+Supported lifecycle hooks:
 
----
+- `LifecycleHook.INITIALIZE`
+- `LifecycleHook.STARTUP`
+- `LifecycleHook.PRE_INIT`
+- `LifecycleHook.CUSTOM_MIDDLEWARE`
+- `LifecycleHook.POST_INIT`
+- `LifecycleHook.SHUTDOWN`
+- `LifecycleHook.SECURITY`
 
-# Hook System Contract
+Hook handlers receive a `HookContext` with:
 
-Location:
+- `app`
+- `config`
+- `logger`
+- `eventBus`
+- `services`
+- `request` for request-scoped security hooks
 
-```
-src/lib/hooks.ts
-```
+## ServiceRegistry Contract
 
-Hooks provide controlled lifecycle extension points.
+Stable methods:
 
-## Registration
+- `register`
+- `set`
+- `get`
+- `has`
+- `remove`
+- `delete`
+- `list`
+- `getAll`
+- `shutdownAll`
 
-```
-hookManager.on(hookName, handler)
-```
+Shutdown behavior:
 
-## Handler Signature
+- `shutdown()` is preferred when present
+- `close()` is used as fallback
+- failures do not stop shutdown of remaining services
 
-```
-async function handler(ctx: HookContext)
-```
+## Controller Contract
 
-## HookContext
+The stable v1 controller contract is a default export shaped like:
 
-Typical context fields:
-
-```
-config
-services
-eventBus
-logger
-```
-
-## Supported Hooks
-
-```
-INITIALIZE
-BEFORE_STARTUP
-AFTER_STARTUP
-BEFORE_SHUTDOWN
-```
-
-Hooks must always be executed sequentially.
-
----
-
-# ServiceRegistry Contract
-
-Location:
-
-```
-src/services/service-registry.ts
+```ts
+export default {
+  route: '/example',
+  handlers: [
+    {
+      method: 'get',
+      path: '/',
+      secure: false,
+      handler: (_req, res) => {
+        res.json({ ok: true });
+      },
+    },
+  ],
+};
 ```
 
-The ServiceRegistry manages infrastructure services.
+The object form above is the documented and supported package contract.
 
-## Required API
+## Scheduler Job Contract
 
-```
-register(name: string, service: unknown): void
-get(name: string): unknown
-remove(name: string): void
-list(): string[]
-shutdownAll(): Promise<void>
-```
+The stable scheduler job contract is a `SchedulerModule` export:
 
-## Shutdown Contract
+```ts
+import type { SchedulerModule } from 'expresto';
 
-Services may optionally implement:
+const job: SchedulerModule = {
+  id: 'cleanup',
+  async run(ctx, options) {
+    void ctx;
+    void options;
+  },
+};
 
-```
-shutdown(): Promise<void>
-close(): Promise<void>
-```
-
-If both methods are absent, the registry will log a warning.
-
-## Failure Handling
-
-If one service fails during shutdown:
-
-- the error is logged
-- remaining services are still shutdown
-
----
-
-# Controller Contract
-
-Location:
-
-```
-src/core/controllers
+export default job;
 ```
 
-Controllers define HTTP request handlers.
+Jobs must be async-safe and must not block the event loop.
 
-## Requirements
+## Explicitly Unsupported in v1
 
-Controllers must be classes.
+The following are not stable runtime contracts in the first release:
 
-Example:
+- plugin loading and plugin configuration
+- full cluster runtime behavior
+- a public Socket.IO server accessor
+- undocumented internal classes that are not exported from the package root
 
-```
-class UserController {
-
-  async getUser(req, res) {
-    ...
-  }
-
-}
-```
-
-## Handler Signature
-
-```
-(req, res, next?)
-```
-
-Handlers may return:
-
-```
-Promise<void>
-```
-
-Controllers should remain stateless.
-
-Dependencies should be obtained from the ServiceRegistry.
-
----
-
-# Scheduler Job Contract
-
-Location:
-
-```
-src/lib/scheduler
-```
-
-Scheduler jobs must export an asynchronous function.
-
-Example:
-
-```
-export async function run(ctx) {
-  ...
-}
-```
-
-## Job Context
-
-The context may include:
-
-```
-config
-services
-eventBus
-logger
-```
-
-## Execution Rules
-
-Jobs must:
-
-- be idempotent where possible
-- not block the event loop
-- handle their own errors
-
-Errors should be emitted via the EventBus.
-
----
-
-# WebSocket Event Contract
-
-Location:
-
-```
-src/lib/websocket
-```
-
-The WebSocket layer integrates with the EventBus.
-
-## Connection Events
-
-```
-expresto.websocket.connected
-expresto.websocket.disconnected
-```
-
-Payload example:
-
-```
-{
-  socketId: string
-  userId?: string
-}
-```
-
-## Authentication
-
-Token sources:
-
-```
-handshake.auth.token
-query.token
-Authorization header
-```
-
-Implementations must treat missing tokens as unauthorized connections.
-
----
-
-# Configuration Contract
-
-Location:
-
-```
-src/config
-```
-
-The configuration object is available throughout the framework.
-
-## Requirements
-
-Configuration must be:
-
-```
-immutable after startup
-serializable
-validated during initialization
-```
-
-Sensitive values must be redacted when exposed via:
-
-```
-/__config endpoint
-```
-
----
-
-# Stability Rules
-
-Framework contracts follow these stability rules.
-
-### Patch releases
-
-```
-no contract changes
-```
-
-### Minor releases
-
-```
-additive contract changes allowed
-```
-
-### Major releases
-
-```
-breaking changes allowed
-```
-
-Any contract changes must be documented in the release notes.
-
----
-
-# Internal vs Public Contracts
-
-Not every internal interface is a stable contract.
-
-Stable contracts include:
-
-```
-EventBus API
-Hook system
-ServiceRegistry API
-Controller interface
-Scheduler job interface
-```
-
-Internal implementation details may change without notice.
-
----
-
-# Summary
-
-Framework contracts define the stable boundaries between components.
-
-They enable:
-
-- predictable behavior
-- safe extension points
-- long-term maintainability
-
-When modifying the framework always verify whether the change affects a
-contract defined in this document.
+_Last updated: 2026-03-15_

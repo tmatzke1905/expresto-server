@@ -86,6 +86,8 @@ Handshake failures emit `expresto.websocket.error` with a reason such as:
 - Socket.IO runs on the shared HTTP server
 - no extra backend port is opened
 - TLS termination is expected to happen at the reverse proxy
+- v1 does not expose a public Socket.IO accessor such as `getSocketServer()`
+  from the package root
 
 ---
 

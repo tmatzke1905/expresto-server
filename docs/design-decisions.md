@@ -11,6 +11,13 @@ way it is**.
 They are important because over time developers forget the original reasoning
 behind design choices.
 
+Status note:
+
+- ADRs may discuss roadmap ideas and historical designs that are not yet part
+  of the supported release surface
+- for current supported behavior, use `docs/public-api.md`,
+  `docs/framework-contracts.md`, and the topic-specific runtime docs
+
 Each decision record contains:
 
 - context

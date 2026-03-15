@@ -1,112 +1,113 @@
 # expresto
 
-!!!Still in development!!!
+expRESTo is an Express-based framework for secured, observable APIs with
+file-based controllers, lifecycle hooks, metrics, schedulers, and optional
+WebSocket support.
 
-Middleware with all the bell and wistles.
+## Supported v1 Scope
 
-# expRESTo
+The first supported release focuses on the parts that are implemented,
+packaged, and tested today:
 
-**expRESTo** is a powerful, extensible middleware framework built on top of Express.js, designed to accelerate the development of secure, observable, and maintainable REST APIs.
+- `createServer()` runtime bootstrap
+- file-based controller loading
+- JWT and Basic Auth
+- lifecycle hooks
+- EventBus and ServiceRegistry primitives
+- Prometheus metrics and OpenTelemetry request tracing
+- attached or standalone scheduler runtime
+- Socket.IO support on the shared HTTP server
 
----
+The following topics are intentionally not part of the supported v1 scope:
 
-## Features
+- full multi-process cluster runtime
+- plugin loading and plugin configuration
+- a public Socket.IO accessor such as `getSocketServer()`
 
-- 🔌 Modular controller loading with lifecycle hooks
-- 🔒 Built-in support for JWT and Basic authentication
-- 🪵 Configurable logging (application and access logs)
-- 📊 Prometheus metrics and OpenTelemetry tracing
-- 📦 Config-driven setup (JSON-based)
-- 🔁 Clustering support via Node.js cluster module
-- 📡 WebSocket integration (Socket.IO)
-- 📚 Route registry with conflict detection and debugging support
-- ⏱️ Integrated Scheduler with cron-based jobs (attached or standalone mode)
+## Install
 
----
+```bash
+npm install expresto
+```
 
 ## Quick Start
 
-1. Install dependencies
+Minimal application bootstrap:
 
-```bash
-npm install
+```ts
+import { createServer } from 'expresto';
+
+const runtime = await createServer('./middleware.config.prod.json');
+
+runtime.app.listen(runtime.config.port, runtime.config.host ?? '0.0.0.0');
 ```
 
-2. Run the application
-
-```bash
-npm run build
-npm start
-```
-
-3. Configuration is loaded from the first CLI argument. If no argument is
-provided, the runtime falls back to `./middleware.config.json`.
-
-### Development vs Production Config
-
-expRESTo supports separate configurations for development and production.
-
-- **Development**: Use `middleware.config.json` (points to TypeScript sources under `src/`).
-- **Production**: Use `middleware.config.prod.json` (points to transpiled JavaScript files under `dist/`).
-
-When starting the application, you can specify which config file to load:
-
-```bash
-# Development
-npm run start:dev -- ./middleware.config.json
-
-# Production
-npm run start:prod -- ./middleware.config.prod.json
-```
-
-When using the published npm package without cloning this repository, call the
-built entry directly:
+The packaged runtime can also be started directly:
 
 ```bash
 node ./node_modules/expresto/dist/index.js ./middleware.config.prod.json
 ```
 
----
+`createServer()` assembles the runtime and returns the Express app together
+with config, logger, EventBus, hook manager, and services. It does not call
+`listen()` on its own.
 
-## Project Structure
+## Stable Controller Contract
 
+```ts
+import type { ExtRequest, ExtResponse } from 'expresto';
+
+export default {
+  route: '/ping',
+  handlers: [
+    {
+      method: 'get',
+      path: '/',
+      secure: false,
+      handler: (_req: ExtRequest, res: ExtResponse) => {
+        res.json({ pong: true });
+      },
+    },
+  ],
+};
 ```
-├── src/
-│   ├── core/              # Core bootstrap logic
-│   ├── lib/               # Logging, routing, metrics, etc.
-│   ├── controllers/       # Your REST controllers
-│   └── index.ts           # Application entry point
-├── tests/                 # Test cases (Jest or similar)
-├── config/                # JSON-based configuration
-├── logs/                  # Application and access logs
-├── docs/                  # Markdown documentation
-└── README.md              # You're here
-```
 
----
+## Public API
+
+The package root exports the supported extension primitives for v1, including:
+
+- `createServer`
+- `hookManager`, `HookManager`, `LifecycleHook`
+- `EventBus`, `createEventPayload`
+- `ServiceRegistry`
+- `HttpError` and the common HTTP error subclasses
+- `signToken`, `verifyToken`
+- the documented config, hook, controller, and scheduler types
+
+See [Public API](./docs/public-api.md) for the exact supported surface.
 
 ## Documentation
 
-Full documentation is located in the `docs/` folder:
-
-- [Routing](./docs/routing.md)
+- [Public API](./docs/public-api.md)
+- [Releases](./docs/releases.md)
+- [Configuration](./docs/configuration.md)
 - [Controllers](./docs/controllers.md)
 - [Security](./docs/security.md)
-- [Configuration](./docs/configuration.md)
-- [Metrics](./docs/metrics.md)
 - [Lifecycle Hooks](./docs/lifecycle-hooks.md)
-- [WebSocket](./docs/websocket.md)
-- [Clustering](./docs/clustering.md)
 - [Service Registry](./docs/service-registry.md)
 - [Scheduler](./docs/scheduler.md)
+- [WebSocket](./docs/websocket.md)
+- [Metrics](./docs/metrics.md)
 - [Event System](./docs/event-system.md)
+- [Framework Contracts](./docs/framework-contracts.md)
 
----
+Roadmap-only topics:
+
+- [Clustering](./docs/clustering.md)
+- [Plugin System](./docs/plugin-system.md)
 
 ## License
 
-MIT License — see `LICENSE` for details.
+MIT License. See [LICENSE](./LICENSE).
 
----
-
-_Last updated: 2025-09-14_
+_Last updated: 2026-03-15_
