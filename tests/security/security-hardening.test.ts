@@ -43,6 +43,10 @@ function createConfig(overrides: Record<string, any> = {}) {
   };
 }
 
+function waitForDeferredMiddleware() {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -94,6 +98,7 @@ describe('Security hardening', () => {
 
   it('rejects secure jwt routes when JWT auth is disabled', async () => {
     const runtime = await createServer(createConfig());
+    await waitForDeferredMiddleware();
 
     const res = await request(runtime.app).get('/api/secure/jwt');
 
@@ -103,6 +108,7 @@ describe('Security hardening', () => {
 
   it('rejects secure basic routes when Basic Auth is disabled', async () => {
     const runtime = await createServer(createConfig());
+    await waitForDeferredMiddleware();
 
     const res = await request(runtime.app).get('/api/secure/basic');
 

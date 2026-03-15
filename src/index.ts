@@ -14,11 +14,16 @@ import {
   updateServiceMetrics,
 } from './lib/monitoring';
 import { otelMiddleware } from './lib/otel';
+import { startScheduler, stopScheduler } from './lib/scheduler/runtime';
 import { SecurityProvider } from './lib/security';
-import { areOpsEnabled, getOpsSecurityMode, validateRuntimeSecurityConfig } from './lib/security/runtime-config';
-import { WebSocketManager } from './lib/websocket/websocket-manager';
 import { ServiceRegistry } from './lib/services/service-registry';
 import { setupLogger } from './lib/setupLogger';
+import {
+  areOpsEnabled,
+  getOpsSecurityMode,
+  validateRuntimeSecurityConfig,
+} from './lib/security/runtime-config';
+import { WebSocketManager } from './lib/websocket/websocket-manager';
 import { opsController } from './core/ops/ops-controller';
 
 let server: import('http').Server | undefined;
@@ -116,24 +121,34 @@ export async function createServer(configInput: string | AppConfig) {
   app.locals.config = config;
   app.locals.services = services;
 
-  // Attach Prometheus middleware for per-request metrics
-  app.use(prometheusMiddleware());
+  const metricsEnabled = config.metrics?.enabled !== false;
+  const corsEnabled = config.cors?.enabled !== false;
+  const helmetEnabled = config.helmet?.enabled !== false;
 
-  // Mount Prometheus metrics endpoint (before contextRoot!)
-  app.use(createPrometheusRouter(config, logger));
+  const ctx: HookContext = { app, config, logger, eventBus, services };
 
-  const ctx: HookContext = { config, logger, eventBus, services };
-
-  // Startup lifecycle hook
+  await hookManager.emit(LifecycleHook.INITIALIZE, ctx);
   await hookManager.emit(LifecycleHook.STARTUP, ctx);
+  await startScheduler(ctx);
 
-  // Update Prometheus metrics after service registration
   updateServiceMetrics(Object.keys(services.getAll()));
 
-  // Register built-in middleware
+  await hookManager.emit(LifecycleHook.PRE_INIT, ctx);
+
+  if (metricsEnabled) {
+    app.use(prometheusMiddleware());
+    app.use(createPrometheusRouter(config, logger));
+  }
+
   app.use(express.json());
-  app.use(cors(config.cors?.options || {}));
-  app.use(helmet(config.helmet?.options || {}));
+
+  if (corsEnabled) {
+    app.use(cors(config.cors?.options || {}));
+  }
+
+  if (helmetEnabled) {
+    app.use(helmet(config.helmet?.options || {}));
+  }
 
   if (config.rateLimit?.enabled) {
     app.use(rateLimitMiddleware(config.rateLimit.options));
@@ -141,18 +156,12 @@ export async function createServer(configInput: string | AppConfig) {
 
   app.use(otelMiddleware(config, logger));
 
-  // Pre-initialization hook
-  await hookManager.emit(LifecycleHook.PRE_INIT, ctx);
-
   // Initialize security provider (e.g. JWT, Basic Auth)
   // Initialize security provider (JWT, Basic Auth, SECURITY hooks)
   const security = new SecurityProvider(config, logger, hookManager, services, eventBus);
 
   // Custom middleware hook
   await hookManager.emit(LifecycleHook.CUSTOM_MIDDLEWARE, ctx);
-
-  // Post-initialization hook
-  await hookManager.emit(LifecycleHook.POST_INIT, ctx);
 
   // Access log middleware
   app.use(
@@ -168,6 +177,7 @@ export async function createServer(configInput: string | AppConfig) {
 
   // Expose routes via ServiceRegistry for ops/introspection
   services.set('routes', loader.getRegisteredRoutes());
+  updateServiceMetrics(Object.keys(services.getAll()));
 
   // Mount consolidated ops endpoints under the contextRoot (e.g. /api/__health, /api/__routes, ...)
   if (areOpsEnabled(config)) {
@@ -188,6 +198,8 @@ export async function createServer(configInput: string | AppConfig) {
       );
     }
   }
+
+  await hookManager.emit(LifecycleHook.POST_INIT, ctx);
 
   // Global error handler (structured JSON) — deferred so tests/consumers can attach routes first
   const errorHandler: express.ErrorRequestHandler = (err, req, res, _next) => {
@@ -233,6 +245,13 @@ export async function createServer(configInput: string | AppConfig) {
   const shutdown = async (reason?: unknown) => {
     try {
       logger.app.warn('Starting graceful shutdown...', { reason });
+
+      try {
+        await stopScheduler(ctx);
+      } catch (err) {
+        logger.app.error('Error during scheduler shutdown:', err);
+      }
+
       await hookManager.emit(LifecycleHook.SHUTDOWN, ctx);
 
       // Ensure all registered services shut down (with 30s timeout safeguard)

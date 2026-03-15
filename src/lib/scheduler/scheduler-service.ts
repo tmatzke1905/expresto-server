@@ -213,4 +213,8 @@ export class SchedulerService {
       jobCount: cancelledJobs,
     });
   }
+
+  async shutdown(): Promise<void> {
+    this.cancelAll();
+  }
 }

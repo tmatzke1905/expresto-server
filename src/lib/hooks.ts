@@ -41,6 +41,7 @@ export enum LifecycleHook {
  * Standard context passed to all hook handlers.
  */
 export interface HookContext {
+  app?: import('express').Express;
   config: AppConfig;
   logger: AppLogger;
   eventBus?: EventBus;

@@ -91,7 +91,10 @@ export interface AppConfig {
   websocket?: WebsocketConfig;
   auth?: AuthConfig;
   cluster?: { enabled?: boolean };
-  metrics?: { endpoint?: string };
+  metrics?: {
+    enabled?: boolean;
+    endpoint?: string;
+  };
   ops?: OpsConfig;
   telemetry?: {
     /** enable/disable OpenTelemetry HTTP span creation (default: false) */

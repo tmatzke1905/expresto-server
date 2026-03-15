@@ -1,7 +1,9 @@
+import path from 'node:path';
 import log4js from 'log4js';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from '../src/index';
+import { hookManager, LifecycleHook } from '../src/lib/hooks';
 
 function createConfig(overrides: Record<string, any> = {}) {
   const base = {
@@ -18,7 +20,7 @@ function createConfig(overrides: Record<string, any> = {}) {
     cors: { enabled: false, options: {} },
     helmet: { enabled: false, options: {} },
     rateLimit: { enabled: false, options: {} },
-    metrics: { endpoint: '/__metrics' },
+    metrics: { enabled: true, endpoint: '/__metrics' },
     telemetry: { enabled: false },
     auth: { jwt: { enabled: false }, basic: { enabled: false } },
   };
@@ -50,6 +52,22 @@ function captureProcessHandlers() {
     return process;
   }) as any);
   return handlers;
+}
+
+function isolateHookManager() {
+  const listeners = (hookManager as any).listeners as Map<LifecycleHook, Array<(ctx: unknown) => unknown>>;
+  const snapshot = new Map(
+    Array.from(listeners.entries(), ([hook, callbacks]) => [hook, [...callbacks]])
+  );
+
+  listeners.clear();
+
+  return () => {
+    listeners.clear();
+    for (const [hook, callbacks] of snapshot.entries()) {
+      listeners.set(hook, callbacks);
+    }
+  };
 }
 
 afterEach(() => {
@@ -130,6 +148,114 @@ describe('createServer runtime behavior', () => {
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(429);
+  });
+
+  it('starts the scheduler through createServer() when scheduler config is enabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(path.resolve(__dirname, 'config/scheduler.json'));
+
+    expect(runtime.services.has('scheduler')).toBe(true);
+
+    const scheduler = runtime.services.get<any>('scheduler');
+    expect((scheduler as any).tasks.size).toBeGreaterThan(0);
+
+    await scheduler.shutdown();
+    runtime.services.delete('scheduler');
+  });
+
+  it('runs lifecycle hooks in order and exposes the app during bootstrap', async () => {
+    captureProcessHandlers();
+    const restoreHooks = isolateHookManager();
+    const order: string[] = [];
+
+    try {
+      hookManager.on(LifecycleHook.INITIALIZE, ctx => {
+        order.push(LifecycleHook.INITIALIZE);
+        expect(ctx.app).toBeDefined();
+      });
+
+      hookManager.on(LifecycleHook.STARTUP, ctx => {
+        order.push(LifecycleHook.STARTUP);
+        expect(ctx.services.has('routes')).toBe(false);
+      });
+
+      hookManager.on(LifecycleHook.PRE_INIT, ctx => {
+        order.push(LifecycleHook.PRE_INIT);
+        ctx.app!.use((_req, res, next) => {
+          res.setHeader('x-pre-init-hook', 'true');
+          next();
+        });
+      });
+
+      hookManager.on(LifecycleHook.CUSTOM_MIDDLEWARE, ctx => {
+        order.push(LifecycleHook.CUSTOM_MIDDLEWARE);
+        ctx.app!.use((_req, res, next) => {
+          res.setHeader('x-custom-hook', 'true');
+          next();
+        });
+      });
+
+      hookManager.on(LifecycleHook.POST_INIT, ctx => {
+        order.push(LifecycleHook.POST_INIT);
+        expect(ctx.services.has('routes')).toBe(true);
+      });
+
+      const runtime = await createServer(createConfig());
+      const res = await request(runtime.app).get('/api/ping').set('Origin', 'https://example.com');
+
+      expect(res.status).toBe(200);
+      expect(res.headers['x-pre-init-hook']).toBe('true');
+      expect(res.headers['x-custom-hook']).toBe('true');
+      expect(order).toEqual([
+        LifecycleHook.INITIALIZE,
+        LifecycleHook.STARTUP,
+        LifecycleHook.PRE_INIT,
+        LifecycleHook.CUSTOM_MIDDLEWARE,
+        LifecycleHook.POST_INIT,
+      ]);
+    } finally {
+      restoreHooks();
+    }
+  });
+
+  it('respects cors.enabled and helmet.enabled when explicitly disabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(createConfig());
+
+    const res = await request(runtime.app).get('/api/ping').set('Origin', 'https://example.com');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    expect(res.headers['x-dns-prefetch-control']).toBeUndefined();
+  });
+
+  it('applies cors and helmet middleware when enabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(
+      createConfig({
+        cors: { enabled: true, options: { origin: '*' } },
+        helmet: { enabled: true, options: {} },
+      })
+    );
+
+    const res = await request(runtime.app).get('/api/ping').set('Origin', 'https://example.com');
+
+    expect(res.status).toBe(200);
+    expect(res.headers['access-control-allow-origin']).toBe('*');
+    expect(res.headers['x-dns-prefetch-control']).toBe('off');
+  });
+
+  it('does not expose the Prometheus endpoint when metrics are disabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(
+      createConfig({
+        metrics: { enabled: false, endpoint: '/__metrics' },
+      })
+    );
+
+    const res = await request(runtime.app).get('/__metrics');
+
+    expect(res.status).toBe(404);
   });
 
   it('shuts services down and exits cleanly on SIGINT', async () => {

@@ -1,73 +1,67 @@
-
-
 # Metrics and Monitoring
 
-expRESTo includes built-in support for Prometheus and OpenTelemetry metrics.
-
----
+expRESTo includes built-in Prometheus metrics and lightweight OpenTelemetry
+request tracing.
 
 ## Prometheus
 
-If enabled in the config, the middleware exposes a Prometheus-compatible endpoint:
+By default, the runtime exposes:
 
 ```txt
 GET /__metrics
 ```
 
-This endpoint is:
-
-- Outside of the `contextRoot`
-- Protected only if the route is not marked as public
-
-### Configuration
+Configuration:
 
 ```json
-"metrics": {
-  "enabled": true,
-  "endpoint": "/__metrics"
+{
+  "metrics": {
+    "enabled": true,
+    "endpoint": "/__metrics"
+  }
 }
 ```
 
-Metrics are generated using a built-in Prometheus client. They include:
+Behavior:
 
-- Request durations
-- HTTP status codes
-- Request counts per route
+- `metrics.enabled` is opt-out, not opt-in
+- the endpoint is mounted outside `contextRoot`
+- the endpoint is not covered by ops security settings
+- set `metrics.enabled: false` to disable the endpoint entirely
 
----
+Built-in Prometheus metrics include:
+
+- `http_requests_total`
+- `http_request_duration_seconds`
+- `http_errors_total`
+- `http_requests_in_flight`
+- `services_registered_total`
+- `routes_registered_total`
+- `route_conflicts_total`
 
 ## OpenTelemetry
 
-expRESTo includes basic OpenTelemetry support. This allows:
+OpenTelemetry request spans are controlled through:
 
-- Tracing of incoming HTTP requests
-- Custom spans inside controllers
-- Export to OTLP/Jaeger/etc. (via external agent)
-
-### Instrumentation Points
-
-- Express middleware
-- Controller handlers (custom spans)
-- Database calls (via manual instrumentation)
-
-You can use the exposed OpenTelemetry tracer to manually create spans:
-
-```ts
-const span = tracer.startSpan('custom-db-call');
-...
-span.end();
+```json
+{
+  "telemetry": {
+    "enabled": true,
+    "serviceName": "my-service"
+  }
+}
 ```
 
-> Note: Automatic instrumentation is limited. Full tracing requires external agent setup.
+Current instrumentation covers:
 
----
+- the HTTP request middleware path
+- manual spans you create yourself
 
-## Integration Tips
+## Operational Advice
 
-- Use Prometheus with Grafana for dashboards
-- Use Dynatrace, Datadog, or Jaeger with OpenTelemetry
-- Avoid enabling both Prometheus and OpenTelemetry scraping on the same endpoint
+- Treat `/__metrics` as an infrastructure endpoint and protect it at the
+  network, proxy, or ingress layer if you expose it publicly.
+- Disable Prometheus metrics when you do not scrape them.
+- Use built-in route and service gauges to spot registration drift at startup.
 
----
-
-_Last updated: 2025-09-14_
+_Last updated: 2026-03-15_

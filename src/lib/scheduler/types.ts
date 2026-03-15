@@ -23,10 +23,5 @@ export interface SchedulerModule {
   run(ctx: HookContext, options?: Record<string, unknown>): Promise<void>;
 }
 
-/** Kontext für Job-Ausführung — analog zu deinen Hooks */
-export interface HookContext {
-  config: import('../config').AppConfig;
-  logger: import('../logger').AppLogger;
-  services: import('../services/service-registry').ServiceRegistry;
-  eventBus?: import('../events').EventBus;
-}
+/** Kontext für Job-Ausführung — identisch zum Framework-Hook-Kontext. */
+export type HookContext = import('../hooks').HookContext;

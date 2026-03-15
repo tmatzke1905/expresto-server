@@ -1,22 +1,17 @@
-
-
 # Scheduler
 
 ## Overview
 
-The Scheduler in **expRESTo** allows you to run asynchronous tasks based on cron expressions.  
-It is designed to be safe, extensible, and integrated with the core services of the framework.
+The scheduler runs cron-based async jobs inside the normal runtime bootstrap.
+`createServer()` starts it explicitly after `LifecycleHook.STARTUP`; there is no
+hidden side-effect import involved anymore.
 
-- **Cluster-aware**: The scheduler is **disabled automatically** if `cluster.enabled = true`.
-- **Modes**:
-  - **attached**: Scheduler runs alongside the HTTP server.
-  - **standalone**: Scheduler runs without HTTP, only jobs.
+Supported modes:
 
----
+- `attached`: scheduler jobs run as part of the normal runtime
+- `standalone`: intended for scheduler-only CLI execution
 
 ## Configuration
-
-In your global configuration file:
 
 ```json
 {
@@ -36,119 +31,88 @@ In your global configuration file:
 }
 ```
 
-### Properties
+## Job Resolution
 
-- **enabled**: Enables/disables the scheduler globally.
-- **mode**: `"attached"` or `"standalone"`. Standalone mode must not run with cluster.
-- **timezone**: Optional. Default is process timezone.
-- **jobs**: A dictionary of named jobs, each with:
-  - **enabled**: Activate or disable the job.
-  - **cron**: Cron expression for scheduling.
-  - **module**: Path or service key to the job module.
-  - **timezone**: Optional override per job.
-  - **options**: Arbitrary JSON object passed to the job at runtime.
+For each configured job, expRESTo resolves `scheduler.jobs.<name>.module` like
+this:
 
----
+1. If a service with that exact key exists in the ServiceRegistry and looks like
+   a `SchedulerModule`, it is used directly.
+2. Otherwise the value is treated as a module path.
+3. Relative paths are resolved from the current working directory.
 
-## Job Modules
-
-A job module must implement the `SchedulerModule` interface:
+Each job module must export:
 
 ```ts
-import type { SchedulerModule } from '../lib/scheduler/types';
+import type { SchedulerModule } from '../src/lib/scheduler/types';
 
 const cleanupJob: SchedulerModule = {
   id: 'cleanup',
   async run(ctx, options) {
-    ctx.logger.app.info('[cleanup] running...');
-    // Use ctx.services to access DB pools, queues, etc.
+    ctx.logger.app.info('[cleanup] running', options);
   }
 };
 
 export default cleanupJob;
 ```
 
-- **id**: Unique identifier of the job.
-- **run**: Async function called on every execution. Receives:
-  - **ctx**: HookContext (includes logger, config, services).
-  - **options**: Configuration from global config.
+## Runtime Behavior
 
----
+- Scheduler startup happens immediately after `LifecycleHook.STARTUP`.
+- Jobs are registered once during bootstrap and started with `node-cron`.
+- Each job has a reentrancy guard, so the same job is not executed in parallel.
+- `leaderOnly` jobs are skipped on non-leader instances when a leader check is configured.
+- Scheduler shutdown cancels all registered tasks before service shutdown.
 
-## Lifecycle
+Cluster interaction:
 
-- Jobs are registered during the **STARTUP** hook.
-- At runtime, each job:
-  - Runs asynchronously.
-  - Is protected by a reentrancy guard (no parallel executions of the same job).
-- On **SHUTDOWN**, all jobs are cancelled.
+- `cluster.enabled: true` disables attached scheduler startup and emits
+  `expresto.scheduler.disabled`.
+- `scheduler.mode: "standalone"` together with `cluster.enabled: true` aborts
+  startup with `expresto.scheduler.startup_error`.
+
+Standalone note:
+
+- In the direct CLI path, standalone mode prevents the HTTP server from calling
+  `listen()`.
+- `createServer()` still assembles and returns the runtime object either way.
 
 ## Events
 
-The Scheduler emits lifecycle and execution events via the **EventBus**.
-All framework events are namespaced under `expresto.scheduler.*`.
+Lifecycle events:
 
-These events are **fire-and-forget** and emitted asynchronously.
-They are intended for observability, metrics, auditing, and custom integrations.
+| Event | Meaning |
+|------|---------|
+| `expresto.scheduler.disabled` | Scheduler was intentionally not started |
+| `expresto.scheduler.starting` | Scheduler bootstrap began |
+| `expresto.scheduler.started` | Scheduler finished registration |
+| `expresto.scheduler.startup_error` | Scheduler bootstrap failed |
+| `expresto.scheduler.stopping` | Scheduler shutdown began |
+| `expresto.scheduler.stopped` | Scheduler shutdown completed |
 
-### Lifecycle Events
+Lifecycle `reason` values currently include:
 
-| Event | Description | Payload |
-|------|------------|---------|
-| `expresto.scheduler.disabled` | Scheduler was not started | `{ reason, ts }` |
-| `expresto.scheduler.starting` | Scheduler initialization started | `{ mode, ts }` |
-| `expresto.scheduler.started` | Scheduler successfully started | `{ mode, ts }` |
-| `expresto.scheduler.startup_error` | Scheduler startup failed | `{ reason, mode?, ts }` |
-| `expresto.scheduler.stopping` | Scheduler shutdown initiated | `{ ts }` |
-| `expresto.scheduler.stopped` | Scheduler shutdown completed | `{ ts }` |
-
-`reason` values include:
 - `config_disabled`
 - `cluster_enabled`
 - `standalone_with_cluster`
+- `initialization_failed`
 
-### Job Execution Events
+Execution events:
 
-| Event | Description | Payload |
-|------|------------|---------|
-| `expresto.scheduler.job.start` | Job execution started | `{ job, ts }` |
-| `expresto.scheduler.job.success` | Job finished successfully | `{ job, durationMs, ts }` |
-| `expresto.scheduler.job.error` | Job execution failed | `{ job, durationMs, error, ts }` |
-| `expresto.scheduler.job.skipped` | Job execution skipped | `{ job, reason, ts }` |
-
-`reason` values include:
-- `running` (previous execution still active)
-- `not_leader` (leader-only job on non-leader instance)
-
-### Timeout Job Events
-
-Timeout-based scheduler tasks emit the following events:
-
-| Event | Description | Payload |
-|------|------------|---------|
-| `expresto.scheduler.timeout.start` | Timeout task started | `{ name, ts }` |
-| `expresto.scheduler.timeout.success` | Timeout task finished | `{ name, durationMs, ts }` |
-| `expresto.scheduler.timeout.error` | Timeout task failed | `{ name, durationMs, error, ts }` |
----
-
-## Usage
-
-### Attached Mode
-Scheduler runs together with REST endpoints.  
-Best for lightweight recurring tasks (cache refresh, metrics sync).
-
-### Standalone Mode
-Scheduler runs without HTTP server.  
-Best for heavy or long-running jobs (batch reports, imports).
-
----
+| Event | Meaning |
+|------|---------|
+| `expresto.scheduler.job.start` | A cron job started |
+| `expresto.scheduler.job.success` | A cron job finished successfully |
+| `expresto.scheduler.job.error` | A cron job failed |
+| `expresto.scheduler.job.skipped` | A cron job was skipped |
+| `expresto.scheduler.timeout.start` | A timeout task started |
+| `expresto.scheduler.timeout.success` | A timeout task finished successfully |
+| `expresto.scheduler.timeout.error` | A timeout task failed |
 
 ## Logging
 
-- Scheduler logs each job’s start, completion time, and errors into the `application.log`.
-- Jobs can also use `ctx.logger` for custom logging.
+- Scheduler startup and shutdown are logged through `logger.app`
+- Each job can use the same logger through `ctx.logger`
+- EventBus integration is optional; without an EventBus, jobs still run
 
-> **Note**  
-> The EventBus is optional. If no EventBus is registered in the HookContext,
-> the Scheduler continues to operate without emitting events.
-```
+_Last updated: 2026-03-15_

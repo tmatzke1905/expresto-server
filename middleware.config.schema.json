@@ -87,7 +87,10 @@
     "metrics": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "endpoint": { "type": "string" } }
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "endpoint": { "type": "string" }
+      }
     },
 
     "ops": {

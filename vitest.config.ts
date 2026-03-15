@@ -5,6 +5,15 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    watchExclude: [
+      'dist/**',
+      'coverage/**',
+      'tests/tmp/**',
+      'logs/**',
+      'tests/logs/**',
+      '**/access.log',
+      '**/application.log',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],

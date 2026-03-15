@@ -78,23 +78,23 @@ startup lifecycle.
 
 Checklist:
 
-- [ ] Wire scheduler bootstrap into the normal server startup path instead of
+- [x] Wire scheduler bootstrap into the normal server startup path instead of
       relying on an unimported side-effect module.
-- [ ] Add an integration test proving scheduler startup via `createServer()`.
-- [ ] Make `cors.enabled`, `helmet.enabled`, and any other documented config
+- [x] Add an integration test proving scheduler startup via `createServer()`.
+- [x] Make `cors.enabled`, `helmet.enabled`, and any other documented config
       flags behave consistently.
-- [ ] Decide whether `metrics.enabled` is supported; implement it or remove it
+- [x] Decide whether `metrics.enabled` is supported; implement it or remove it
       from the contract.
-- [ ] Review lifecycle hook names and startup order for consistency between code
+- [x] Review lifecycle hook names and startup order for consistency between code
       and docs.
-- [ ] Update `docs/configuration.md`, `docs/lifecycle-hooks.md`,
+- [x] Update `docs/configuration.md`, `docs/lifecycle-hooks.md`,
       `docs/startup-sequence.md`, and `docs/scheduler.md`.
 
 Verification:
 
-- [ ] `npm test -- --run`
-- [ ] Runtime integration tests passing
-- [ ] Configuration and lifecycle docs updated
+- [x] `npm test -- --run`
+- [x] Runtime integration tests passing
+- [x] Configuration and lifecycle docs updated
 
 ### Package 4 — Supported v1 Scope and Public API
 

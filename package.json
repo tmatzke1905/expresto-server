@@ -43,9 +43,9 @@
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "validate": "ts-node src/cli.ts",
-    "test": "vitest",
+    "test": "vitest run",
     "test:package": "vitest run tests/package/package-smoke.test.ts",
-    "test:watch": "vitest --watch",
+    "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "sonar:scan": "npx @sonar/scan"
   },
