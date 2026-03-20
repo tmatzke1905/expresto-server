@@ -84,7 +84,9 @@ The package root exports the supported extension primitives for v1, including:
 - `signToken`, `verifyToken`
 - the documented config, hook, controller, and scheduler types
 
-See [Public API](./docs/public-api.md) for the exact supported surface.
+See [Public API](./docs/public-api.md) for the exact supported surface,
+method reference, and copy-paste examples for bootstrap, hooks, events,
+services, JWT helpers, and error handling.
 
 ## Documentation
 
@@ -111,4 +113,4 @@ Roadmap-only topics:
 
 MIT License. See [LICENSE](./LICENSE).
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-03-20_
