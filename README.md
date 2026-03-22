@@ -10,6 +10,7 @@ The first supported release focuses on the parts that are implemented,
 packaged, and tested today:
 
 - `createServer()` runtime bootstrap
+- `runtime.getSocketServer()` after HTTP startup when WebSockets are enabled
 - file-based controller loading
 - JWT and Basic Auth
 - lifecycle hooks
@@ -22,7 +23,6 @@ The following topics are intentionally not part of the supported v1 scope:
 
 - full multi-process cluster runtime
 - plugin loading and plugin configuration
-- a public Socket.IO accessor such as `getSocketServer()`
 
 ## Install
 
@@ -49,8 +49,32 @@ node ./node_modules/expresto-server/dist/index.js ./middleware.config.prod.json
 ```
 
 `createServer()` assembles the runtime and returns the Express app together
-with config, logger, EventBus, hook manager, and services. It does not call
-`listen()` on its own.
+with config, logger, EventBus, hook manager, services, and a supported
+`getSocketServer()` accessor. It does not call `listen()` on its own.
+
+## WebSocket Extension API
+
+When `websocket.enabled` is set, the supported extension flow is:
+
+```ts
+import { createServer } from 'expresto-server';
+
+const runtime = await createServer('./middleware.config.prod.json');
+
+runtime.app.listen(runtime.config.port, runtime.config.host ?? '0.0.0.0');
+
+const io = runtime.getSocketServer();
+if (!io) {
+  throw new Error('Socket.IO server is only available after app.listen().');
+}
+
+io.on('connection', socket => {
+  socket.emit('server.ready', { ok: true });
+});
+```
+
+`getSocketServer()` returns `undefined` when WebSockets are disabled or when the
+runtime has not been attached to an HTTP server with `runtime.app.listen(...)`.
 
 ## Stable Controller Contract
 
@@ -77,6 +101,7 @@ export default {
 The package root exports the supported extension primitives for v1, including:
 
 - `createServer`
+- `ExprestoRuntime`
 - `hookManager`, `HookManager`, `LifecycleHook`
 - `EventBus`, `createEventPayload`
 - `ServiceRegistry`
@@ -86,7 +111,7 @@ The package root exports the supported extension primitives for v1, including:
 
 See [Public API](./docs/public-api.md) for the exact supported surface,
 method reference, and copy-paste examples for bootstrap, hooks, events,
-services, JWT helpers, and error handling.
+services, JWT helpers, WebSocket access, and error handling.
 
 ## Documentation
 
@@ -113,4 +138,4 @@ Roadmap-only topics:
 
 MIT License. See [LICENSE](./LICENSE).
 
-_Last updated: 2026-03-20_
+_Last updated: 2026-03-22_

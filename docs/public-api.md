@@ -11,6 +11,7 @@ v1.x.
 Stable runtime bootstrap:
 
 - `createServer`
+- `ExprestoRuntime` type
 
 Stable hook API:
 
@@ -57,6 +58,7 @@ Stable config and authoring types:
 - `SchedulerConfig`
 - `SchedulerJobConfig`
 - `WebsocketConfig`
+- `ExprestoRuntime`
 - `SchedulerMode`
 - `SchedulerModule`
 - `ExtRequest`
@@ -83,8 +85,44 @@ It returns:
 - `hookManager`: the hook manager instance used for bootstrap and shutdown
 - `eventBus`: the runtime EventBus
 - `services`: the shared ServiceRegistry
+- `getSocketServer()`: the shared Socket.IO server after `runtime.app.listen(...)`
+  when `websocket.enabled=true`
 
 `createServer()` assembles the runtime but does not call `listen()` for you.
+
+### `runtime.getSocketServer()`
+
+Returns the Socket.IO `Server` instance that expresto-server attaches to the
+shared HTTP server.
+
+Behavior rules:
+
+- returns `undefined` before `runtime.app.listen(...)` has been called
+- returns `undefined` when `websocket.enabled` is not set to `true`
+- returns the same Socket.IO server instance for the lifetime of the runtime
+- is the supported extension point for custom event registration on the shared
+  WebSocket server
+
+Supported usage pattern:
+
+```ts
+import { createServer } from 'expresto-server';
+
+const runtime = await createServer('./middleware.config.prod.json');
+
+runtime.app.listen(runtime.config.port, runtime.config.host ?? '0.0.0.0');
+
+const io = runtime.getSocketServer();
+if (!io) {
+  throw new Error('Socket.IO server is not available for this runtime.');
+}
+
+io.on('connection', socket => {
+  socket.on('chat:join', payload => {
+    socket.emit('chat:joined', payload);
+  });
+});
+```
 
 Example with a config file:
 
@@ -432,10 +470,9 @@ release:
 
 - plugin loading and plugin configuration
 - a real multi-process cluster runtime
-- a public Socket.IO server accessor such as `getSocketServer()`
 - internal classes that are not exported from the package root
 
 If one of these areas becomes supported later, it should first be added to this
 document and to the versioning policy.
 
-_Last updated: 2026-03-20_
+_Last updated: 2026-03-22_

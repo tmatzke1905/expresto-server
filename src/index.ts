@@ -1,8 +1,10 @@
+import type { Server as HttpServer } from 'node:http';
 import cors from 'cors';
 import express from 'express';
 import rateLimitMiddleware from 'express-rate-limit';
 import helmet from 'helmet';
 import log4js from 'log4js';
+import type { Server as SocketIOServer } from 'socket.io';
 import { AppConfig, getConfig, initConfig } from './lib/config';
 import { ControllerLoader } from './lib/controller-loader';
 import { HttpError } from './lib/errors';
@@ -23,6 +25,7 @@ import {
   getOpsSecurityMode,
   validateRuntimeSecurityConfig,
 } from './lib/security/runtime-config';
+import type { AppLogger } from './lib/logger';
 import { WebSocketManager } from './lib/websocket/websocket-manager';
 import { opsController } from './core/ops/ops-controller';
 
@@ -83,7 +86,22 @@ export type {
   SecurityMode,
 } from './lib/types';
 
-let server: import('node:http').Server | undefined;
+export interface ExprestoRuntime {
+  app: express.Express;
+  config: AppConfig;
+  logger: AppLogger;
+  hookManager: typeof hookManager;
+  eventBus: EventBus;
+  services: ServiceRegistry;
+  /**
+   * Returns the shared Socket.IO server after `runtime.app.listen(...)` has
+   * been called with `websocket.enabled=true`.
+   *
+   * Returns `undefined` when WebSockets are disabled or when no HTTP server has
+   * been started for this runtime.
+   */
+  getSocketServer: () => SocketIOServer | undefined;
+}
 
 type BasicAuthUsers = NonNullable<NonNullable<NonNullable<AppConfig['auth']>['basic']>['users']>;
 type Log4jsWithShutdown = typeof log4js & { shutdown?: (callback: () => void) => void };
@@ -123,7 +141,7 @@ function getErrorMessage(err: unknown): string {
  * Creates and configures the expresto-server runtime asynchronously.
  * @param configInput Path to the middleware config JSON file or an AppConfig object.
  */
-export async function createServer(configInput: string | AppConfig) {
+export async function createServer(configInput: string | AppConfig): Promise<ExprestoRuntime> {
   // Load configuration
   let config: AppConfig;
   if (typeof configInput === 'string') {
@@ -177,12 +195,34 @@ export async function createServer(configInput: string | AppConfig) {
   app.locals.eventBus = eventBus;
   app.locals.config = config;
   app.locals.services = services;
+  let runtimeServer: HttpServer | undefined;
+  let wsManager: WebSocketManager | undefined;
 
   const metricsEnabled = config.metrics?.enabled !== false;
   const corsEnabled = config.cors?.enabled !== false;
   const helmetEnabled = config.helmet?.enabled !== false;
 
   const ctx: HookContext = { app, config, logger, eventBus, services };
+
+  const attachWebSocketServer = (httpServer: HttpServer): void => {
+    runtimeServer ??= httpServer;
+
+    if (!config.websocket?.enabled || wsManager) {
+      return;
+    }
+
+    wsManager = new WebSocketManager(httpServer, config, logger, eventBus, services);
+    services.set('websocketManager', wsManager);
+    updateServiceMetrics(Object.keys(services.getAll()));
+    logger.app.info('WebSocket support enabled on shared HTTP server');
+  };
+
+  const originalListen = app.listen.bind(app);
+  app.listen = ((...args: unknown[]) => {
+    const httpServer = (originalListen as (...listenArgs: unknown[]) => HttpServer)(...args);
+    attachWebSocketServer(httpServer);
+    return httpServer;
+  }) as typeof app.listen;
 
   await hookManager.emit(LifecycleHook.INITIALIZE, ctx);
   await hookManager.emit(LifecycleHook.STARTUP, ctx);
@@ -327,11 +367,11 @@ export async function createServer(configInput: string | AppConfig) {
         logger.app.error('Error during service shutdown:', err);
       }
 
-      if (server) {
+      if (runtimeServer) {
         logger.app.info('Shutting down HTTP server...');
         try {
           await new Promise<void>((resolve, reject) => {
-            server!.close(err => (err ? reject(err) : resolve()));
+            runtimeServer!.close(err => (err ? reject(err) : resolve()));
           });
         } catch (err) {
           logger.app.error('Error during HTTP server shutdown:', err);
@@ -366,7 +406,15 @@ export async function createServer(configInput: string | AppConfig) {
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-  return { app, config, logger, hookManager, eventBus, services };
+  return {
+    app,
+    config,
+    logger,
+    hookManager,
+    eventBus,
+    services,
+    getSocketServer: () => wsManager?.getServer(),
+  } satisfies ExprestoRuntime;
 }
 
 const isDirectExecution =
@@ -381,25 +429,18 @@ if (isDirectExecution) {
   // sonar-ignore-next-line typescript:S7785
   (async () => {
     const configPath = process.argv[2] || './middleware.config.json';
-    const { app, config, logger, eventBus, services } = await createServer(
+    const runtime = await createServer(
       configPath
     );
+    const { app, config, logger } = runtime;
 
     if (config.scheduler?.enabled && config.scheduler?.mode === 'standalone') {
       logger.app.info('expresto-server running in scheduler-only standalone mode (no HTTP server)');
       return;
     }
 
-    // Start server and capture instance for shutdown
-    server = app.listen(config.port, config.host || '0.0.0.0', () => {
+    app.listen(config.port, config.host || '0.0.0.0', () => {
       logger.app.info(`expresto-server listening at http://${config.host || '0.0.0.0'}:${config.port}`);
     });
-
-    // Optional WebSocket support on the same HTTP server
-    if (config.websocket?.enabled) {
-      const wsManager = new WebSocketManager(server!, config, logger, eventBus, services);
-      services.set('websocketManager', wsManager);
-      logger.app.info('WebSocket support enabled on shared HTTP server');
-    }
   })();
 }

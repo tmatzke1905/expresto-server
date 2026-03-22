@@ -61,6 +61,7 @@ Release gate:
 
 - beta-foundation work is complete
 - `npm run build`, `npm test`, and `npm run coverage` are green
+- coverage thresholds require at least 85% statements, functions, and lines
 - release notes are drafted
 - supported docs are aligned with the implementation
 
@@ -70,15 +71,20 @@ Status: planned first stable release
 
 Goal: mark the v1 core as stable for production use.
 
+Roadmap scope:
+
+- Packages 4 and 1 from [roadmap.md](./roadmap.md)
+
 Included feature set:
 
 - everything from `1.0.0-beta`
+- supported WebSocket extension API
 - example project completed for the supported v1 surface
 - example project referenced from README and integration docs
 
 Stable release gate:
 
-- Package 1 from [roadmap.md](./roadmap.md) is complete
+- Packages 4 and 1 from [roadmap.md](./roadmap.md) are complete
 - the example project uses the published package only
 - the example project covers:
   - controller contract
@@ -87,7 +93,7 @@ Stable release gate:
   - EventBus and ServiceRegistry usage
   - ops endpoints and metrics
   - scheduler setup
-  - optional WebSocket setup
+  - supported WebSocket setup and extension path
 - smoke checks validate example startup and basic requests
 
 ## 1.1.0
@@ -119,25 +125,22 @@ Stable release gate:
 
 Status: tentative
 
-Goal: extend runtime integrations around WebSockets and scheduler reliability.
+Goal: add scheduler reliability controls without breaking the stable v1 runtime.
 
 Roadmap scope:
 
-- Packages 4-5 from [roadmap.md](./roadmap.md)
+- Package 5 from [roadmap.md](./roadmap.md)
 - example project refresh for the new stable feature set
 
 Planned feature set:
 
-- supported WebSocket extension API
-- documented runtime access pattern for Socket.IO integrations
 - scheduler retries, timeout handling, and improved failure reporting
 - scheduler observability improvements
 
 Stable release gate:
 
-- WebSocket extension points are documented and tested
 - scheduler reliability behavior is documented and tested
-- example project demonstrates both WebSocket integration and scheduled jobs
+- example project demonstrates the supported scheduled job setup
 
 ## 1.3.0
 
@@ -193,10 +196,10 @@ Stable release gate:
 ## Version Mapping Summary
 
 - `1.0.0-beta`: completed beta-foundation work
-- `1.0.0`: beta foundation plus Package 1
+- `1.0.0`: beta foundation plus Packages 4 and 1
 - `1.1.0`: Package 3 plus example refresh
-- `1.2.0`: Packages 4-5 plus example refresh
+- `1.2.0`: Package 5 plus example refresh
 - `1.3.0`: Package 6 plus example refresh
 - `TBD`: Package 2, version assigned after cluster design review
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-03-22_

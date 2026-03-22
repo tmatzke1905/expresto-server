@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import path from 'node:path';
 import log4js from 'log4js';
 import request from 'supertest';
@@ -43,6 +44,12 @@ function createConfig(overrides: Record<string, any> = {}) {
 
 function waitForDeferredMiddleware() {
   return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function closeHttpServer(server: { close: (callback: (err?: Error) => void) => void }) {
+  await new Promise<void>((resolve, reject) => {
+    server.close(err => (err ? reject(err) : resolve()));
+  });
 }
 
 function captureProcessHandlers() {
@@ -161,6 +168,68 @@ describe('createServer runtime behavior', () => {
 
     await scheduler.shutdown();
     runtime.services.delete('scheduler');
+  });
+
+  it('exposes the Socket.IO server only after app.listen() when WebSockets are enabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(
+      createConfig({
+        websocket: {
+          enabled: true,
+          path: '/socket.io-test',
+          cors: { origin: '*', methods: ['GET'] },
+        },
+        auth: {
+          jwt: {
+            enabled: true,
+            secret: 'test-secret',
+            algorithm: 'HS256',
+          },
+          basic: {
+            enabled: false,
+          },
+        },
+      })
+    );
+
+    expect(runtime.getSocketServer()).toBeUndefined();
+    expect(runtime.services.has('websocketManager')).toBe(false);
+
+    const httpServer = runtime.app.listen(0, '127.0.0.1');
+    await once(httpServer, 'listening');
+
+    const io = runtime.getSocketServer();
+    expect(io).toBeDefined();
+    expect(io?.path()).toBe('/socket.io-test');
+    expect(runtime.services.has('websocketManager')).toBe(true);
+
+    const customConnectionHandler = vi.fn((socket: { on: (event: string, cb: () => void) => void }) => {
+      socket.on('custom:ping', () => {});
+    });
+
+    io?.on('connection', customConnectionHandler);
+    const connectionListeners = io?.listeners('connection') ?? [];
+    expect(connectionListeners).toContain(customConnectionHandler);
+
+    const fakeSocket = {
+      id: 'socket-1',
+      data: {
+        auth: { sub: 'user-1' },
+        context: { user: 'user-1', token: 'token-1', requestId: 'req-1' },
+      },
+      on: vi.fn(),
+      onAny: vi.fn(),
+    };
+
+    const registeredHandler = connectionListeners.find(listener => listener === customConnectionHandler) as
+      | ((socket: typeof fakeSocket) => void)
+      | undefined;
+    registeredHandler?.(fakeSocket);
+
+    expect(customConnectionHandler).toHaveBeenCalledWith(fakeSocket);
+    expect(fakeSocket.on).toHaveBeenCalledWith('custom:ping', expect.any(Function));
+
+    await closeHttpServer(httpServer);
   });
 
   it('runs lifecycle hooks in order and exposes the app during bootstrap', async () => {

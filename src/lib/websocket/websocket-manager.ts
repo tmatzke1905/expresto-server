@@ -68,6 +68,14 @@ export class WebSocketManager {
   }
 
   /**
+   * Returns the underlying Socket.IO server instance for supported runtime
+   * extension use cases.
+   */
+  getServer(): IOServer {
+    return this.io;
+  }
+
+  /**
    * Configure authentication middleware and connection lifecycle logging.
    */
   private setup(): void {
