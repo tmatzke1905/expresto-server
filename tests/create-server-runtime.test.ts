@@ -232,6 +232,19 @@ describe('createServer runtime behavior', () => {
     await closeHttpServer(httpServer);
   });
 
+  it('keeps the Socket.IO accessor undefined after app.listen() when WebSockets are disabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(createConfig());
+
+    const httpServer = runtime.app.listen(0, '127.0.0.1');
+    await once(httpServer, 'listening');
+
+    expect(runtime.getSocketServer()).toBeUndefined();
+    expect(runtime.services.has('websocketManager')).toBe(false);
+
+    await closeHttpServer(httpServer);
+  });
+
   it('runs lifecycle hooks in order and exposes the app during bootstrap', async () => {
     captureProcessHandlers();
     const restoreHooks = isolateHookManager();
@@ -346,6 +359,30 @@ describe('createServer runtime behavior', () => {
     expect(shutdownSpy).toHaveBeenCalledTimes(1);
     expect(exitSpy).toHaveBeenCalledWith(0);
     expect(runtime.services.list()).toEqual([]);
+  });
+
+  it('shuts the active HTTP server down on SIGINT after app.listen()', async () => {
+    const handlers = captureProcessHandlers();
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(((_code?: number) => undefined as never) as (code?: number) => never);
+    const shutdownSpy = vi
+      .spyOn(log4js as typeof log4js & { shutdown: (callback: () => void) => void }, 'shutdown')
+      .mockImplementation(callback => callback());
+
+    const runtime = await createServer(createConfig());
+    const httpServer = runtime.app.listen(0, '127.0.0.1');
+    await once(httpServer, 'listening');
+
+    const closeSpy = vi.spyOn(httpServer, 'close');
+    const closed = once(httpServer, 'close');
+
+    await handlers.get('SIGINT')?.();
+    await closed;
+
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(shutdownSpy).toHaveBeenCalledTimes(1);
+    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
   it('runs the fatal handler fallback for unhandled rejections', async () => {

@@ -16,6 +16,7 @@ import {
   updateServiceMetrics,
 } from './lib/monitoring';
 import { otelMiddleware } from './lib/otel';
+import { startConfiguredRuntime } from './lib/runtime-cli';
 import { startScheduler, stopScheduler } from './lib/scheduler/runtime';
 import { SecurityProvider } from './lib/security';
 import { ServiceRegistry } from './lib/services/service-registry';
@@ -427,20 +428,8 @@ const isDirectExecution =
 // when this file is executed directly via `node`, and not when imported as a module.
 if (isDirectExecution) {
   // sonar-ignore-next-line typescript:S7785
+  /* v8 ignore next -- @preserve direct CLI bootstrap delegates to tested runtime-cli helper */
   (async () => {
-    const configPath = process.argv[2] || './middleware.config.json';
-    const runtime = await createServer(
-      configPath
-    );
-    const { app, config, logger } = runtime;
-
-    if (config.scheduler?.enabled && config.scheduler?.mode === 'standalone') {
-      logger.app.info('expresto-server running in scheduler-only standalone mode (no HTTP server)');
-      return;
-    }
-
-    app.listen(config.port, config.host || '0.0.0.0', () => {
-      logger.app.info(`expresto-server listening at http://${config.host || '0.0.0.0'}:${config.port}`);
-    });
+    await startConfiguredRuntime(createServer, process.argv[2] || './middleware.config.json');
   })();
 }
