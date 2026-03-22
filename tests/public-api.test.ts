@@ -24,6 +24,32 @@ describe('public root API', () => {
     expect(verifyToken).toBeTypeOf('function');
   });
 
+  it('returns a runtime with a stable Socket.IO accessor', async () => {
+    vi.spyOn(process, 'on').mockImplementation((() => process) as typeof process.on);
+
+    const runtime = await createServer({
+      port: 0,
+      host: '127.0.0.1',
+      contextRoot: '/api',
+      controllersPath: 'tests/controllers',
+      log: {
+        access: './tests/logs/access.log',
+        application: './tests/logs/application.log',
+        level: 'ERROR',
+        traceRequests: false,
+      },
+      cors: { enabled: false, options: {} },
+      helmet: { enabled: false, options: {} },
+      rateLimit: { enabled: false, options: {} },
+      metrics: { enabled: false, endpoint: '/__metrics' },
+      telemetry: { enabled: false },
+      auth: { jwt: { enabled: false }, basic: { enabled: false } },
+    });
+
+    expect(runtime.getSocketServer).toBeTypeOf('function');
+    expect(runtime.getSocketServer()).toBeUndefined();
+  });
+
   it('supports hook registration and service access through the root exports', async () => {
     const hooks = new HookManager();
     const services = new ServiceRegistry();

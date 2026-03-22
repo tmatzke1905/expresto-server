@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import path from 'node:path';
 import log4js from 'log4js';
 import request from 'supertest';
@@ -43,6 +44,12 @@ function createConfig(overrides: Record<string, any> = {}) {
 
 function waitForDeferredMiddleware() {
   return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+async function closeHttpServer(server: { close: (callback: (err?: Error) => void) => void }) {
+  await new Promise<void>((resolve, reject) => {
+    server.close(err => (err ? reject(err) : resolve()));
+  });
 }
 
 function captureProcessHandlers() {
@@ -163,6 +170,81 @@ describe('createServer runtime behavior', () => {
     runtime.services.delete('scheduler');
   });
 
+  it('exposes the Socket.IO server only after app.listen() when WebSockets are enabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(
+      createConfig({
+        websocket: {
+          enabled: true,
+          path: '/socket.io-test',
+          cors: { origin: '*', methods: ['GET'] },
+        },
+        auth: {
+          jwt: {
+            enabled: true,
+            secret: 'test-secret',
+            algorithm: 'HS256',
+          },
+          basic: {
+            enabled: false,
+          },
+        },
+      })
+    );
+
+    expect(runtime.getSocketServer()).toBeUndefined();
+    expect(runtime.services.has('websocketManager')).toBe(false);
+
+    const httpServer = runtime.app.listen(0, '127.0.0.1');
+    await once(httpServer, 'listening');
+
+    const io = runtime.getSocketServer();
+    expect(io).toBeDefined();
+    expect(io?.path()).toBe('/socket.io-test');
+    expect(runtime.services.has('websocketManager')).toBe(true);
+
+    const customConnectionHandler = vi.fn((socket: { on: (event: string, cb: () => void) => void }) => {
+      socket.on('custom:ping', () => {});
+    });
+
+    io?.on('connection', customConnectionHandler);
+    const connectionListeners = io?.listeners('connection') ?? [];
+    expect(connectionListeners).toContain(customConnectionHandler);
+
+    const fakeSocket = {
+      id: 'socket-1',
+      data: {
+        auth: { sub: 'user-1' },
+        context: { user: 'user-1', token: 'token-1', requestId: 'req-1' },
+      },
+      on: vi.fn(),
+      onAny: vi.fn(),
+    };
+
+    const registeredHandler = connectionListeners.find(listener => listener === customConnectionHandler) as
+      | ((socket: typeof fakeSocket) => void)
+      | undefined;
+    registeredHandler?.(fakeSocket);
+
+    expect(customConnectionHandler).toHaveBeenCalledWith(fakeSocket);
+    expect(fakeSocket.on).toHaveBeenCalledWith('custom:ping', expect.any(Function));
+
+    await closeHttpServer(httpServer);
+  });
+
+  it('keeps the Socket.IO accessor undefined after app.listen() when WebSockets are disabled', async () => {
+    captureProcessHandlers();
+    const runtime = await createServer(createConfig());
+
+    const httpServer = runtime.app.listen(0, '127.0.0.1');
+    await once(httpServer, 'listening');
+
+    expect(runtime.getSocketServer()).toBeUndefined();
+    expect(runtime.services.has('websocketManager')).toBe(false);
+
+    await closeHttpServer(httpServer);
+  });
+
   it('runs lifecycle hooks in order and exposes the app during bootstrap', async () => {
     captureProcessHandlers();
     const restoreHooks = isolateHookManager();
@@ -277,6 +359,30 @@ describe('createServer runtime behavior', () => {
     expect(shutdownSpy).toHaveBeenCalledTimes(1);
     expect(exitSpy).toHaveBeenCalledWith(0);
     expect(runtime.services.list()).toEqual([]);
+  });
+
+  it('shuts the active HTTP server down on SIGINT after app.listen()', async () => {
+    const handlers = captureProcessHandlers();
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(((_code?: number) => undefined as never) as (code?: number) => never);
+    const shutdownSpy = vi
+      .spyOn(log4js as typeof log4js & { shutdown: (callback: () => void) => void }, 'shutdown')
+      .mockImplementation(callback => callback());
+
+    const runtime = await createServer(createConfig());
+    const httpServer = runtime.app.listen(0, '127.0.0.1');
+    await once(httpServer, 'listening');
+
+    const closeSpy = vi.spyOn(httpServer, 'close');
+    const closed = once(httpServer, 'close');
+
+    await handlers.get('SIGINT')?.();
+    await closed;
+
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+    expect(shutdownSpy).toHaveBeenCalledTimes(1);
+    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
   it('runs the fatal handler fallback for unhandled rejections', async () => {

@@ -28,8 +28,9 @@ export default defineConfig({
         'src/lib/scheduler/types.ts',
       ],
       thresholds: {
-        statements: 80,
-        lines: 80,
+        statements: 85,
+        functions: 85,
+        lines: 85,
       },
     },
   },

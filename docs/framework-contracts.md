@@ -128,7 +128,6 @@ The following are not stable runtime contracts in the first release:
 
 - plugin loading and plugin configuration
 - full cluster runtime behavior
-- a public Socket.IO server accessor
 - undocumented internal classes that are not exported from the package root
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-03-22_

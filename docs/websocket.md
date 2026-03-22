@@ -86,9 +86,36 @@ Handshake failures emit `expresto-server.websocket.error` with a reason such as:
 - Socket.IO runs on the shared HTTP server
 - no extra backend port is opened
 - TLS termination is expected to happen at the reverse proxy
-- v1 does not expose a public Socket.IO accessor such as `getSocketServer()`
-  from the package root
+- the supported runtime accessor is `runtime.getSocketServer()`
+- `runtime.getSocketServer()` returns `undefined` until `runtime.app.listen(...)`
+  has been called
+- `runtime.getSocketServer()` also returns `undefined` in non-listening test
+  runtimes and scheduler-only runtimes
+
+## Supported Extension Pattern
+
+Use the shared runtime returned by `createServer()` and attach your custom
+Socket.IO behavior after starting the HTTP server:
+
+```ts
+import { createServer } from 'expresto-server';
+
+const runtime = await createServer('./middleware.config.prod.json');
+
+runtime.app.listen(runtime.config.port, runtime.config.host ?? '0.0.0.0');
+
+const io = runtime.getSocketServer();
+if (!io) {
+  throw new Error('Socket.IO server is not available for this runtime.');
+}
+
+io.on('connection', socket => {
+  socket.on('chat:ping', payload => {
+    socket.emit('chat:pong', payload);
+  });
+});
+```
 
 ---
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-03-22_

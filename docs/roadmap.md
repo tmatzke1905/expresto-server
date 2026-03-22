@@ -2,7 +2,10 @@
 
 ## Release Readiness Packages
 
-This roadmap lists the remaining open packages in execution order.
+This roadmap lists the remaining open packages.
+
+Package numbers stay stable as package IDs for planning and branch mapping. The
+active execution order is defined explicitly below.
 
 The completed beta-foundation packages were removed from the active roadmap for
 clarity. Their outcomes are already reflected in the codebase, release notes,
@@ -21,23 +24,49 @@ Execution rule for release work:
 
 ## Stabilization Package (Post-beta, Pre-1.0.0)
 
-The first public npm prerelease is `1.0.0-beta`. The next package after the
-release gate is the example project needed to promote that beta to the stable
-`1.0.0` release.
+The first public npm prerelease is `1.0.0-beta`. The release plan has been
+updated so that Package 4 is implemented next and becomes part of the stable
+`1.0.0` path. Package 1 follows immediately after it and closes the
+stable-release gate with a public example app.
+
+### Package 4 — WebSocket Extension API
+
+Branch: `codex/feature-04-websocket-extension-api`
+
+Goal: Introduce a deliberate developer-facing WebSocket extension surface before
+the first stable release, or explicitly document why it stays internal.
+
+Checklist:
+
+- [x] Decide whether a public accessor such as `getSocketServer()` is actually
+      part of the supported API.
+- [x] If supported, export a stable runtime access pattern for Socket.IO after
+      server startup.
+- [x] Define timing rules for when the WebSocket server is available and how
+      non-listening or test runtimes should behave.
+- [x] Add tests for access before/after startup, auth context propagation, and
+      custom event registration.
+- [x] Update `docs/websocket.md`, README, and public API docs to match the
+      chosen contract.
+
+Verification:
+
+- [x] Public WebSocket access is covered by tests or explicitly documented as unsupported
+- [x] No docs mention private/internal access patterns anymore
 
 ### Package 1 — Example App and Integration Starter
 
 Branch: `codex/feature-01-example-app-starter`
 
-Goal: Give adopters a realistic reference project for the supported v1 API and
-close the stable-release gate after the beta package has been published.
+Goal: Give adopters a realistic reference project for the supported v1 API,
+including the supported WebSocket surface, and close the stable-release gate.
 
 Checklist:
 
 - [ ] Create a small example app that consumes the published `expresto-server@1.0.0-beta`
       package only, not repo-internal imports.
 - [ ] Demonstrate the supported controller contract, auth, ops, scheduler, and
-      optional WebSocket setup.
+      supported WebSocket setup.
 - [ ] Decide whether the database facade belongs inside this repository or as a
       companion project; document the decision.
 - [ ] Add smoke checks for the example app startup path and basic requests.
@@ -51,9 +80,9 @@ Verification:
 
 ## Deferred Feature Packages (Post-1.0.0)
 
-The following feature areas are intentionally **not** part of the first
-stable production release. They should only be started after Package 1 is
-finished and `1.0.0` has been shipped, or once the release plan has been
+The following feature areas remain intentionally **not** part of the first
+stable production release. They should only be started after Packages 4 and 1
+are finished and `1.0.0` has been shipped, or once the release plan has been
 explicitly changed.
 
 ### Package 2 — Real Clustering Support
@@ -111,31 +140,6 @@ Verification:
 - [ ] Plugin startup failures abort safely without partial runtime state
 - [ ] Plugin docs describe only implemented behavior
 
-### Package 4 — WebSocket Extension API
-
-Branch: `codex/feature-04-websocket-extension-api`
-
-Goal: Introduce a deliberate developer-facing WebSocket extension surface, or
-explicitly document why it stays internal.
-
-Checklist:
-
-- [ ] Decide whether a public accessor such as `getSocketServer()` is actually
-      part of the supported API.
-- [ ] If supported, export a stable runtime access pattern for Socket.IO after
-      server startup.
-- [ ] Define timing rules for when the WebSocket server is available and how
-      non-listening or test runtimes should behave.
-- [ ] Add tests for access before/after startup, auth context propagation, and
-      custom event registration.
-- [ ] Update `docs/websocket.md`, README, and public API docs to match the
-      chosen contract.
-
-Verification:
-
-- [ ] Public WebSocket access is covered by tests or explicitly documented as unsupported
-- [ ] No docs mention private/internal access patterns anymore
-
 ### Package 5 — Scheduler Reliability Extensions
 
 Branch: `codex/feature-05-scheduler-reliability`
@@ -188,10 +192,10 @@ Verification:
 
 ### Recommended Merge Order
 
-1. `codex/feature-01-example-app-starter`
-2. `codex/feature-02-clustering-runtime`
-3. `codex/feature-03-plugin-system`
-4. `codex/feature-04-websocket-extension-api`
+1. `codex/feature-04-websocket-extension-api`
+2. `codex/feature-01-example-app-starter`
+3. `codex/feature-02-clustering-runtime`
+4. `codex/feature-03-plugin-system`
 5. `codex/feature-05-scheduler-reliability`
 6. `codex/feature-06-ops-health-observability`
 
@@ -200,10 +204,10 @@ Verification:
 
 Coding agents should implement the current focus areas in the following order:
 
-1. Example App and Stable Release Gate
-2. Real Clustering Support
-3. Supported Plugin System
-4. WebSocket Extension API
+1. WebSocket Extension API
+2. Example App and Stable Release Gate
+3. Real Clustering Support
+4. Supported Plugin System
 5. Scheduler Reliability Extensions
 6. Ops and Health Maturity
 
@@ -506,7 +510,8 @@ duration
 
 # 8. Test Coverage
 
-Goal: >90% coverage.
+Goal: >90% overall coverage, with at least 85% statements, functions, and
+lines for release-ready code.
 
 Add tests for:
 
