@@ -50,7 +50,7 @@ const cleanupJob: SchedulerModule = {
   id: 'cleanup',
   async run(ctx, options) {
     ctx.logger.app.info('[cleanup] running', options);
-  }
+  },
 };
 
 export default cleanupJob;
@@ -66,8 +66,13 @@ export default cleanupJob;
 
 Cluster interaction:
 
-- `cluster.enabled: true` disables attached scheduler startup and emits
-  `expresto-server.scheduler.disabled`.
+- `cluster.enabled: true` supports only `scheduler.mode: "attached"`.
+- the leader worker runs attached jobs
+- non-leader workers emit `expresto-server.scheduler.disabled` with
+  `reason: "cluster_worker_non_leader"`
+- runtimes created outside the clustered CLI bootstrap emit
+  `reason: "cluster_bootstrap_required"` instead of starting jobs without clear
+  ownership
 - `scheduler.mode: "standalone"` together with `cluster.enabled: true` aborts
   startup with `expresto-server.scheduler.startup_error`.
 
@@ -81,33 +86,34 @@ Standalone note:
 
 Lifecycle events:
 
-| Event | Meaning |
-|------|---------|
-| `expresto-server.scheduler.disabled` | Scheduler was intentionally not started |
-| `expresto-server.scheduler.starting` | Scheduler bootstrap began |
-| `expresto-server.scheduler.started` | Scheduler finished registration |
-| `expresto-server.scheduler.startup_error` | Scheduler bootstrap failed |
-| `expresto-server.scheduler.stopping` | Scheduler shutdown began |
-| `expresto-server.scheduler.stopped` | Scheduler shutdown completed |
+| Event                                     | Meaning                                 |
+| ----------------------------------------- | --------------------------------------- |
+| `expresto-server.scheduler.disabled`      | Scheduler was intentionally not started |
+| `expresto-server.scheduler.starting`      | Scheduler bootstrap began               |
+| `expresto-server.scheduler.started`       | Scheduler finished registration         |
+| `expresto-server.scheduler.startup_error` | Scheduler bootstrap failed              |
+| `expresto-server.scheduler.stopping`      | Scheduler shutdown began                |
+| `expresto-server.scheduler.stopped`       | Scheduler shutdown completed            |
 
 Lifecycle `reason` values currently include:
 
 - `config_disabled`
-- `cluster_enabled`
+- `cluster_bootstrap_required`
+- `cluster_worker_non_leader`
 - `standalone_with_cluster`
 - `initialization_failed`
 
 Execution events:
 
-| Event | Meaning |
-|------|---------|
-| `expresto-server.scheduler.job.start` | A cron job started |
-| `expresto-server.scheduler.job.success` | A cron job finished successfully |
-| `expresto-server.scheduler.job.error` | A cron job failed |
-| `expresto-server.scheduler.job.skipped` | A cron job was skipped |
-| `expresto-server.scheduler.timeout.start` | A timeout task started |
+| Event                                       | Meaning                              |
+| ------------------------------------------- | ------------------------------------ |
+| `expresto-server.scheduler.job.start`       | A cron job started                   |
+| `expresto-server.scheduler.job.success`     | A cron job finished successfully     |
+| `expresto-server.scheduler.job.error`       | A cron job failed                    |
+| `expresto-server.scheduler.job.skipped`     | A cron job was skipped               |
+| `expresto-server.scheduler.timeout.start`   | A timeout task started               |
 | `expresto-server.scheduler.timeout.success` | A timeout task finished successfully |
-| `expresto-server.scheduler.timeout.error` | A timeout task failed |
+| `expresto-server.scheduler.timeout.error`   | A timeout task failed                |
 
 ## Logging
 
@@ -115,4 +121,4 @@ Execution events:
 - Each job can use the same logger through `ctx.logger`
 - EventBus integration is optional; without an EventBus, jobs still run
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-03-23_

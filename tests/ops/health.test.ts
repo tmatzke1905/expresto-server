@@ -17,7 +17,15 @@ describe('Ops: Health endpoint', () => {
     const res = await request(app).get('/api/__health');
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
+    expect(res.body.pid).toBe(process.pid);
     expect(res.body.uptime).toBeGreaterThan(0);
     expect(Array.isArray(res.body.services)).toBe(true);
+    expect(res.body.cluster).toEqual(
+      expect.objectContaining({
+        configured: false,
+        active: false,
+        role: 'single',
+      })
+    );
   });
 });

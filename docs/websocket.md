@@ -35,6 +35,13 @@ Required configuration:
 
 If WebSockets are enabled without secure JWT configuration, startup fails.
 
+Cluster rule:
+
+- `websocket.enabled: true` together with `cluster.enabled: true` is rejected
+  at startup
+- clustered Socket.IO adapters and sticky-session behavior are not part of the
+  supported runtime yet
+
 ---
 
 ## Authentication Sources
@@ -118,4 +125,4 @@ io.on('connection', socket => {
 
 ---
 
-_Last updated: 2026-03-22_
+_Last updated: 2026-03-23_

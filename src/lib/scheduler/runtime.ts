@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { resolveClusterRuntimeInfo } from '../cluster/context';
 import { createEventPayload } from '../events';
 import type { HookContext } from '../hooks';
 import { SchedulerService } from './scheduler-service';
@@ -67,11 +68,14 @@ export async function startScheduler(ctx: HookContext): Promise<void> {
   }
 
   if (ctx.services.has('scheduler')) {
-    ctx.logger.app.warn('[Scheduler] startup skipped because a scheduler service is already registered');
+    ctx.logger.app.warn(
+      '[Scheduler] startup skipped because a scheduler service is already registered'
+    );
     return;
   }
 
-  if (ctx.config.cluster?.enabled) {
+  const clusterInfo = resolveClusterRuntimeInfo(ctx.config);
+  if (clusterInfo.configured) {
     if (schedCfg.mode === 'standalone') {
       const err = new Error('[Scheduler] standalone mode is not allowed with cluster enabled');
       eventBus?.emit(
@@ -85,24 +89,47 @@ export async function startScheduler(ctx: HookContext): Promise<void> {
       throw err;
     }
 
-    ctx.logger.app.warn('[Scheduler] disabled (cluster mode active)');
-    eventBus?.emit(
-      'expresto-server.scheduler.disabled',
-      createEventPayload('scheduler-runtime', { reason: 'cluster_enabled' })
-    );
-    return;
+    if (!clusterInfo.active) {
+      ctx.logger.app.warn(
+        '[Scheduler] disabled until the clustered CLI bootstrap activates worker ownership'
+      );
+      eventBus?.emit(
+        'expresto-server.scheduler.disabled',
+        createEventPayload('scheduler-runtime', { reason: 'cluster_bootstrap_required' })
+      );
+      return;
+    }
+
+    if (!clusterInfo.schedulerLeader) {
+      ctx.logger.app.info('[Scheduler] disabled on non-leader cluster worker');
+      eventBus?.emit(
+        'expresto-server.scheduler.disabled',
+        createEventPayload('scheduler-runtime', {
+          reason: 'cluster_worker_non_leader',
+          workerId: clusterInfo.workerId,
+          workerOrdinal: clusterInfo.workerOrdinal,
+        })
+      );
+      return;
+    }
   }
 
   eventBus?.emit(
     'expresto-server.scheduler.starting',
-    createEventPayload('scheduler-runtime', { mode: schedCfg.mode ?? 'attached' })
+    createEventPayload('scheduler-runtime', {
+      mode: schedCfg.mode ?? 'attached',
+      clusterWorkerId: clusterInfo.active ? clusterInfo.workerId : undefined,
+      schedulerLeader: clusterInfo.schedulerLeader,
+    })
   );
 
   const scheduler = new SchedulerService(schedCfg, ctx);
   ctx.services.set('scheduler', scheduler);
 
   try {
-    await scheduler.init((_name: string, cfg: SchedulerJobConfig) => resolveSchedulerModule(ctx, cfg));
+    await scheduler.init((_name: string, cfg: SchedulerJobConfig) =>
+      resolveSchedulerModule(ctx, cfg)
+    );
   } catch (err) {
     ctx.services.delete('scheduler');
     eventBus?.emit(

@@ -1,8 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { CLUSTER_ENV } from '../../src/lib/cluster/context';
 import { SchedulerService } from '../../src/lib/scheduler/scheduler-service';
 import { startScheduler, stopScheduler } from '../../src/lib/scheduler/runtime';
 import { ServiceRegistry } from '../../src/lib/services/service-registry';
 import type { SchedulerJobConfig, SchedulerModule } from '../../src/lib/scheduler/types';
+
+const originalEnv = { ...process.env };
+
+function restoreEnv(): void {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) {
+      delete process.env[key];
+    }
+  }
+
+  for (const [key, value] of Object.entries(originalEnv)) {
+    process.env[key] = value;
+  }
+}
 
 function createCtx(overrides: Record<string, any> = {}) {
   const emit = vi.fn();
@@ -43,7 +58,10 @@ function expectEvent(
 }
 
 afterEach(() => {
+  restoreEnv();
   vi.restoreAllMocks();
+  vi.resetModules();
+  vi.doUnmock('node:cluster');
 });
 
 describe('scheduler runtime bootstrap', () => {
@@ -73,7 +91,7 @@ describe('scheduler runtime bootstrap', () => {
     );
   });
 
-  it('disables attached scheduler startup in cluster mode', async () => {
+  it('disables attached scheduler startup until the clustered bootstrap activates worker ownership', async () => {
     const { ctx, emit } = createCtx({
       config: {
         cluster: { enabled: true },
@@ -87,11 +105,13 @@ describe('scheduler runtime bootstrap', () => {
 
     await startScheduler(ctx);
 
-    expect(ctx.logger.app.warn).toHaveBeenCalledWith('[Scheduler] disabled (cluster mode active)');
+    expect(ctx.logger.app.warn).toHaveBeenCalledWith(
+      '[Scheduler] disabled until the clustered CLI bootstrap activates worker ownership'
+    );
     expect(ctx.services.has('scheduler')).toBe(false);
     expectEvent(emit, 'expresto-server.scheduler.disabled', {
       source: 'scheduler-runtime',
-      reason: 'cluster_enabled',
+      reason: 'cluster_bootstrap_required',
     });
   });
 
@@ -144,13 +164,15 @@ describe('scheduler runtime bootstrap', () => {
     };
     services.set('cleanup-job', moduleFromService);
 
-    const initSpy = vi.spyOn(SchedulerService.prototype, 'init').mockImplementation(async register => {
-      const resolved = await register(
-        'cleanup',
-        ctx.config.scheduler.jobs.cleanup as SchedulerJobConfig
-      );
-      expect(resolved).toBe(moduleFromService);
-    });
+    const initSpy = vi
+      .spyOn(SchedulerService.prototype, 'init')
+      .mockImplementation(async register => {
+        const resolved = await register(
+          'cleanup',
+          ctx.config.scheduler.jobs.cleanup as SchedulerJobConfig
+        );
+        expect(resolved).toBe(moduleFromService);
+      });
 
     await startScheduler(ctx);
 
@@ -159,6 +181,48 @@ describe('scheduler runtime bootstrap', () => {
     expectEvent(emit, 'expresto-server.scheduler.starting', {
       source: 'scheduler-runtime',
       mode: 'attached',
+      schedulerLeader: false,
+    });
+  });
+
+  it('disables attached scheduler startup on non-leader cluster workers', async () => {
+    process.env[CLUSTER_ENV.enabled] = 'true';
+    process.env[CLUSTER_ENV.schedulerLeader] = 'false';
+    process.env[CLUSTER_ENV.workerCount] = '2';
+    process.env[CLUSTER_ENV.workerOrdinal] = '2';
+
+    const { ctx, emit } = createCtx({
+      config: {
+        cluster: { enabled: true },
+        scheduler: {
+          enabled: true,
+          mode: 'attached',
+          jobs: {},
+        },
+      },
+    });
+
+    vi.resetModules();
+    vi.doMock('node:cluster', () => ({
+      default: {
+        isWorker: true,
+        worker: { id: 9 },
+      },
+    }));
+
+    const { startScheduler: startSchedulerWithWorker } =
+      await import('../../src/lib/scheduler/runtime');
+
+    await startSchedulerWithWorker(ctx);
+
+    expect(ctx.logger.app.info).toHaveBeenCalledWith(
+      '[Scheduler] disabled on non-leader cluster worker'
+    );
+    expectEvent(emit, 'expresto-server.scheduler.disabled', {
+      source: 'scheduler-runtime',
+      reason: 'cluster_worker_non_leader',
+      workerId: 9,
+      workerOrdinal: 2,
     });
   });
 
@@ -264,6 +328,8 @@ describe('scheduler runtime bootstrap', () => {
     await stopScheduler(ctx);
 
     expect(ctx.logger.app.info).not.toHaveBeenCalledWith('[Scheduler] shutting down...');
-    expect(emit.mock.calls.some(([event]) => event === 'expresto-server.scheduler.stopping')).toBe(false);
+    expect(emit.mock.calls.some(([event]) => event === 'expresto-server.scheduler.stopping')).toBe(
+      false
+    );
   });
 });

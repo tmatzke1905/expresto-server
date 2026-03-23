@@ -54,6 +54,7 @@ Stable config and authoring types:
 
 - `AppConfig`
 - `AuthConfig`
+- `ClusterConfig`
 - `OpsConfig`
 - `SchedulerConfig`
 - `SchedulerJobConfig`
@@ -162,6 +163,14 @@ const runtime = await createServer(config);
 
 For config fields and runtime rules, see [Configuration](./configuration.md).
 
+Cluster note:
+
+- `createServer()` remains a single-runtime assembly API
+- the supported clustered primary/worker bootstrap is the bundled CLI start
+  path documented in [Clustering](./clustering.md)
+- `cluster.enabled` is therefore a supported config field, but not a new
+  package-root function
+
 ## Hook API
 
 Stable hook exports:
@@ -173,11 +182,11 @@ Stable hook exports:
 
 Supported `HookManager` instance methods:
 
-| Method | Purpose |
-|------|---------|
-| `register(hook, callback)` | Register a callback for a lifecycle hook |
-| `on(hook, callback)` | Alias for `register()` |
-| `emit(hook, context)` | Run all callbacks for a hook and await completion |
+| Method                     | Purpose                                           |
+| -------------------------- | ------------------------------------------------- |
+| `register(hook, callback)` | Register a callback for a lifecycle hook          |
+| `on(hook, callback)`       | Alias for `register()`                            |
+| `emit(hook, context)`      | Run all callbacks for a hook and await completion |
 
 Typical usage with the shared `hookManager`:
 
@@ -233,12 +242,12 @@ Stable event exports:
 
 Stable `EventBus` methods:
 
-| Method | Purpose |
-|------|---------|
-| `on(event, handler)` | Subscribe to an event and get an unsubscribe function |
-| `off(event, handler)` | Remove a previously registered handler |
-| `emit(event, payload)` | Fire-and-forget async emission |
-| `emitAsync(event, payload)` | Emit and await all handlers |
+| Method                      | Purpose                                               |
+| --------------------------- | ----------------------------------------------------- |
+| `on(event, handler)`        | Subscribe to an event and get an unsubscribe function |
+| `off(event, handler)`       | Remove a previously registered handler                |
+| `emit(event, payload)`      | Fire-and-forget async emission                        |
+| `emitAsync(event, payload)` | Emit and await all handlers                           |
 
 `createEventPayload(source, context)` builds the standard payload shape used by
 framework events.
@@ -272,10 +281,7 @@ unsubscribe();
 Use `emit()` when listeners should run in the background:
 
 ```ts
-eventBus.emit(
-  'example.audit.user_login',
-  createEventPayload('example-app', { userId: '42' })
-);
+eventBus.emit('example.audit.user_login', createEventPayload('example-app', { userId: '42' }));
 ```
 
 For naming conventions, framework event names, and broader EventBus patterns,
@@ -289,17 +295,17 @@ Stable service export:
 
 Supported `ServiceRegistry` methods:
 
-| Method | Purpose |
-|------|---------|
-| `register(name, instance)` | Add a service and throw if the key already exists |
-| `set(name, instance)` | Add or replace a service |
-| `get(name)` | Return a service or throw if it does not exist |
-| `has(name)` | Check whether a service exists |
-| `remove(name)` | Remove a service without a return value |
-| `delete(name)` | Remove a service and return whether it existed |
-| `list()` | Return all registered service names |
-| `getAll()` | Return all services as an object |
-| `shutdownAll()` | Call `shutdown()` or `close()` on registered services if available |
+| Method                     | Purpose                                                            |
+| -------------------------- | ------------------------------------------------------------------ |
+| `register(name, instance)` | Add a service and throw if the key already exists                  |
+| `set(name, instance)`      | Add or replace a service                                           |
+| `get(name)`                | Return a service or throw if it does not exist                     |
+| `has(name)`                | Check whether a service exists                                     |
+| `remove(name)`             | Remove a service without a return value                            |
+| `delete(name)`             | Remove a service and return whether it existed                     |
+| `list()`                   | Return all registered service names                                |
+| `getAll()`                 | Return all services as an object                                   |
+| `shutdownAll()`            | Call `shutdown()` or `close()` on registered services if available |
 
 Example:
 
@@ -387,18 +393,9 @@ import { signToken, verifyToken } from 'expresto-server';
 
 const secret = 'replace-with-a-real-secret';
 
-const token = await signToken(
-  { sub: 'demo-user', role: 'admin' },
-  secret,
-  'HS256',
-  '1h'
-);
+const token = await signToken({ sub: 'demo-user', role: 'admin' }, secret, 'HS256', '1h');
 
-const payload = await verifyToken<{ sub: string; role: string }>(
-  token,
-  secret,
-  'HS256'
-);
+const payload = await verifyToken<{ sub: string; role: string }>(token, secret, 'HS256');
 
 console.log(payload.sub, payload.role);
 ```
@@ -469,10 +466,10 @@ The following areas are intentionally not supported package API in the first
 release:
 
 - plugin loading and plugin configuration
-- a real multi-process cluster runtime
+- clustered WebSocket runtime behavior
 - internal classes that are not exported from the package root
 
 If one of these areas becomes supported later, it should first be added to this
 document and to the versioning policy.
 
-_Last updated: 2026-03-22_
+_Last updated: 2026-03-23_

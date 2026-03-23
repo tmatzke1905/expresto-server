@@ -62,7 +62,10 @@ function captureProcessHandlers() {
 }
 
 function isolateHookManager() {
-  const listeners = (hookManager as any).listeners as Map<LifecycleHook, Array<(ctx: unknown) => unknown>>;
+  const listeners = (hookManager as any).listeners as Map<
+    LifecycleHook,
+    Array<(ctx: unknown) => unknown>
+  >;
   const snapshot = new Map(
     Array.from(listeners.entries(), ([hook, callbacks]) => [hook, [...callbacks]])
   );
@@ -99,7 +102,9 @@ describe('createServer runtime behavior', () => {
 
     await waitForDeferredMiddleware();
 
-    const objectRes = await request(runtime.app).get('/api/fail-object').set('x-request-id', 'req-123');
+    const objectRes = await request(runtime.app)
+      .get('/api/fail-object')
+      .set('x-request-id', 'req-123');
     expect(objectRes.status).toBe(422);
     expect(objectRes.body).toEqual({
       error: {
@@ -203,9 +208,11 @@ describe('createServer runtime behavior', () => {
     expect(io?.path()).toBe('/socket.io-test');
     expect(runtime.services.has('websocketManager')).toBe(true);
 
-    const customConnectionHandler = vi.fn((socket: { on: (event: string, cb: () => void) => void }) => {
-      socket.on('custom:ping', () => {});
-    });
+    const customConnectionHandler = vi.fn(
+      (socket: { on: (event: string, cb: () => void) => void }) => {
+        socket.on('custom:ping', () => {});
+      }
+    );
 
     io?.on('connection', customConnectionHandler);
     const connectionListeners = io?.listeners('connection') ?? [];
@@ -221,15 +228,42 @@ describe('createServer runtime behavior', () => {
       onAny: vi.fn(),
     };
 
-    const registeredHandler = connectionListeners.find(listener => listener === customConnectionHandler) as
-      | ((socket: typeof fakeSocket) => void)
-      | undefined;
+    const registeredHandler = connectionListeners.find(
+      listener => listener === customConnectionHandler
+    ) as ((socket: typeof fakeSocket) => void) | undefined;
     registeredHandler?.(fakeSocket);
 
     expect(customConnectionHandler).toHaveBeenCalledWith(fakeSocket);
     expect(fakeSocket.on).toHaveBeenCalledWith('custom:ping', expect.any(Function));
 
     await closeHttpServer(httpServer);
+  });
+
+  it('rejects unsupported clustered WebSocket startup with a clear error', async () => {
+    captureProcessHandlers();
+
+    await expect(
+      createServer(
+        createConfig({
+          cluster: { enabled: true },
+          websocket: {
+            enabled: true,
+          },
+          auth: {
+            jwt: {
+              enabled: true,
+              secret: 'test-secret',
+              algorithm: 'HS256',
+            },
+            basic: {
+              enabled: false,
+            },
+          },
+        })
+      )
+    ).rejects.toThrow(
+      '[Cluster] websocket.enabled is not supported with cluster.enabled; disable WebSockets or run a single worker'
+    );
   });
 
   it('keeps the Socket.IO accessor undefined after app.listen() when WebSockets are disabled', async () => {

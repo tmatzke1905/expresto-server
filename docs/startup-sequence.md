@@ -44,12 +44,19 @@ It does not call `listen()` by itself.
 
 When `dist/index.js` is executed directly:
 
-1. `createServer()` runs first.
-2. If `scheduler.mode === "standalone"` and the scheduler is enabled, the
-   process stays in scheduler-only mode and no HTTP listener is opened.
-3. Otherwise the framework calls `app.listen(config.port, config.host)`.
-4. If WebSockets are enabled, `WebSocketManager` is attached to that HTTP
-   server.
+1. The config file is loaded and validated first.
+2. Cluster/runtime compatibility rules are checked before any listener starts.
+3. If `cluster.enabled !== true`, the normal single-process runtime starts:
+   - `createServer()` runs
+   - standalone scheduler mode suppresses HTTP `listen()`
+   - otherwise the framework calls `app.listen(config.port, config.host)`
+4. If `cluster.enabled === true`, the primary process starts instead:
+   - worker processes are forked
+   - each worker runs the normal `createServer()` bootstrap
+   - each worker calls `app.listen(config.port, config.host)` on the shared port
+   - only the leader worker starts the attached scheduler
+5. If WebSockets are enabled in a non-clustered runtime,
+   `WebSocketManager` is attached to the shared HTTP server.
 
 ## Shutdown Order
 
@@ -62,6 +69,15 @@ On `SIGINT`, `SIGTERM`, `uncaughtException`, or `unhandledRejection`:
 5. Log appenders are flushed.
 6. The process exits.
 
+Clustered CLI shutdown adds a primary-driven outer layer:
+
+1. the primary receives `SIGINT` or `SIGTERM`
+2. the primary sends `SIGTERM` to each worker
+3. each worker performs the normal shutdown order above
+4. after `cluster.workerShutdownTimeoutMs`, the primary sends `SIGKILL` to any
+   remaining workers
+5. the primary flushes its logger and exits
+
 ## Failure Behavior
 
 - Config validation failures abort startup before any runtime is returned.
@@ -69,5 +85,9 @@ On `SIGINT`, `SIGTERM`, `uncaughtException`, or `unhandledRejection`:
   `createServer()`.
 - Failing scheduler bootstrap aborts `createServer()`.
 - Failing `CUSTOM_MIDDLEWARE` hooks are logged and bootstrap continues.
+- `cluster.enabled` with `scheduler.mode: "standalone"` aborts before worker
+  startup.
+- `cluster.enabled` with `websocket.enabled: true` aborts before worker
+  startup.
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-03-23_

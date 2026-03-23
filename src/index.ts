@@ -6,11 +6,14 @@ import helmet from 'helmet';
 import log4js from 'log4js';
 import type { Server as SocketIOServer } from 'socket.io';
 import { AppConfig, getConfig, initConfig } from './lib/config';
+import { resolveClusterRuntimeInfo } from './lib/cluster/context';
+import { validateClusterRuntimeConfig } from './lib/cluster/runtime';
 import { ControllerLoader } from './lib/controller-loader';
 import { HttpError } from './lib/errors';
 import { createEventPayload, EventBus } from './lib/events';
 import { HookContext, hookManager, LifecycleHook } from './lib/hooks';
 import {
+  updateClusterMetrics,
   createPrometheusRouter,
   prometheusMiddleware,
   updateServiceMetrics,
@@ -33,15 +36,13 @@ import { opsController } from './core/ops/ops-controller';
 export type {
   AppConfig,
   AuthConfig,
+  ClusterConfig,
   OpsConfig,
   SchedulerConfig,
   SchedulerJobConfig,
   WebsocketConfig,
 } from './lib/config';
-export {
-  EventBus,
-  createEventPayload,
-} from './lib/events';
+export { EventBus, createEventPayload } from './lib/events';
 export type {
   AnyEventHandler,
   EventBusOptions,
@@ -50,11 +51,7 @@ export type {
   StandardEventPayload,
   StableEventBus,
 } from './lib/events';
-export {
-  HookManager,
-  hookManager,
-  LifecycleHook,
-} from './lib/hooks';
+export { HookManager, hookManager, LifecycleHook } from './lib/hooks';
 export type { HookContext } from './lib/hooks';
 export type { AppLogger } from './lib/logger';
 export {
@@ -67,25 +64,11 @@ export {
   NotFoundError,
   UnauthorizedError,
 } from './lib/errors';
-export {
-  ServiceRegistry,
-} from './lib/services/service-registry';
-export {
-  signToken,
-  verifyToken,
-} from './lib/security/jwt';
+export { ServiceRegistry } from './lib/services/service-registry';
+export { signToken, verifyToken } from './lib/security/jwt';
 export type { SupportedHmacAlg } from './lib/security/jwt';
-export type {
-  SchedulerMode,
-  SchedulerModule,
-} from './lib/scheduler/types';
-export type {
-  ExtHandler,
-  ExtNext,
-  ExtRequest,
-  ExtResponse,
-  SecurityMode,
-} from './lib/types';
+export type { SchedulerMode, SchedulerModule } from './lib/scheduler/types';
+export type { ExtHandler, ExtNext, ExtRequest, ExtResponse, SecurityMode } from './lib/types';
 
 export interface ExprestoRuntime {
   app: express.Express;
@@ -152,6 +135,7 @@ export async function createServer(configInput: string | AppConfig): Promise<Exp
     config = configInput;
   }
 
+  validateClusterRuntimeConfig(config);
   validateRuntimeSecurityConfig(config);
 
   // Initialize logger, hooks, events, services
@@ -190,12 +174,14 @@ export async function createServer(configInput: string | AppConfig): Promise<Exp
     },
   });
   const services = new ServiceRegistry(eventBus);
+  const clusterInfo = resolveClusterRuntimeInfo(config);
 
   // Create express app
   const app = express();
   app.locals.eventBus = eventBus;
   app.locals.config = config;
   app.locals.services = services;
+  app.locals.cluster = clusterInfo;
   let runtimeServer: HttpServer | undefined;
   let wsManager: WebSocketManager | undefined;
 
@@ -204,6 +190,8 @@ export async function createServer(configInput: string | AppConfig): Promise<Exp
   const helmetEnabled = config.helmet?.enabled !== false;
 
   const ctx: HookContext = { app, config, logger, eventBus, services };
+
+  updateClusterMetrics(clusterInfo);
 
   const attachWebSocketServer = (httpServer: HttpServer): void => {
     runtimeServer ??= httpServer;
@@ -315,13 +303,16 @@ export async function createServer(configInput: string | AppConfig): Promise<Exp
 
     logger.app.error('request_error', { status, url: req.originalUrl, method: req.method, err });
     // Namespaced framework event for consumers (metrics/audit/etc.)
-    eventBus.emit('expresto-server.http.request_error', createEventPayload('http-error-handler', {
-      status,
-      url: req.originalUrl,
-      method: req.method,
-      code,
-      message,
-    }));
+    eventBus.emit(
+      'expresto-server.http.request_error',
+      createEventPayload('http-error-handler', {
+        status,
+        url: req.originalUrl,
+        method: req.method,
+        code,
+        message,
+      })
+    );
 
     // Backward-compatible legacy event name
     eventBus.emit('error', err);
@@ -419,9 +410,7 @@ export async function createServer(configInput: string | AppConfig): Promise<Exp
 }
 
 const isDirectExecution =
-  typeof require !== 'undefined' &&
-  typeof module !== 'undefined' &&
-  require.main === module;
+  typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module;
 
 // Allow direct execution as CLI
 // This check ensures the server only starts automatically

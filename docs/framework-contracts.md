@@ -10,6 +10,7 @@ The supported contracts in v1 are:
 
 - package root exports documented in `docs/public-api.md`
 - JSON configuration schema
+- clustered CLI runtime behavior documented in `docs/clustering.md`
 - controller module contract
 - hook system contract
 - EventBus contract
@@ -127,7 +128,7 @@ Jobs must be async-safe and must not block the event loop.
 The following are not stable runtime contracts in the first release:
 
 - plugin loading and plugin configuration
-- full cluster runtime behavior
+- clustered WebSocket behavior
 - undocumented internal classes that are not exported from the package root
 
-_Last updated: 2026-03-22_
+_Last updated: 2026-03-23_

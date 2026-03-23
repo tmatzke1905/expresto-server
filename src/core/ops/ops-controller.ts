@@ -59,6 +59,17 @@ type ConfigLike = {
   };
 };
 
+type ClusterInfoLike = {
+  configured?: boolean;
+  active?: boolean;
+  role?: string;
+  primaryPid?: number;
+  workerId?: number;
+  workerOrdinal?: number;
+  workerCount?: number;
+  schedulerLeader?: boolean;
+};
+
 /**
  * Retrieve an optional EventBus from `app.locals`.
  *
@@ -95,6 +106,18 @@ function getServices(req: express.Request): ServicesLike | undefined {
 function getConfig(req: express.Request): ConfigLike | undefined {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (req.app.locals as any).config as ConfigLike | undefined;
+}
+
+/**
+ * Retrieve optional cluster metadata from `app.locals`.
+ *
+ * This is populated by the main bootstrap so ops responses can make it explicit
+ * when a request was served by a cluster worker instead of pretending the
+ * response is globally aggregated.
+ */
+function getClusterInfo(req: express.Request): ClusterInfoLike | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (req.app.locals as any).cluster as ClusterInfoLike | undefined;
 }
 
 /**
@@ -169,16 +192,23 @@ function redact(value: unknown, path: string[] = []): unknown {
 opsController.get('/__health', (req, res) => {
   const services = getServices(req);
   const serviceNames = services ? Object.keys(services.getAll()) : [];
+  const cluster = getClusterInfo(req);
 
-  getEventBus(req)?.emit('expresto-server.ops.health_read', createEventPayload('ops-controller', {
-    endpoint: '/__health',
-    services: serviceNames,
-  }));
+  getEventBus(req)?.emit(
+    'expresto-server.ops.health_read',
+    createEventPayload('ops-controller', {
+      endpoint: '/__health',
+      services: serviceNames,
+      cluster,
+    })
+  );
 
   res.json({
     status: 'ok',
     uptime: process.uptime(),
+    pid: process.pid,
     services: serviceNames,
+    cluster,
   });
 });
 
@@ -207,7 +237,8 @@ opsController.get('/__routes', (req, res) => {
     | Array<{ method: string; path: string; secure: string; source?: string }>
     | undefined;
 
-  const routes = serviceRoutes ??
+  const routes =
+    serviceRoutes ??
     routeRegistry.getRoutes().map(r => ({
       method: r.method,
       path: r.path,
@@ -251,10 +282,13 @@ opsController.get('/__config', (req, res) => {
 
     res.json(cfg);
   } catch (err) {
-    getEventBus(req)?.emit('expresto-server.ops.config_error', createEventPayload('ops-controller', {
-      endpoint: '/__config',
-      error: String(err),
-    }));
+    getEventBus(req)?.emit(
+      'expresto-server.ops.config_error',
+      createEventPayload('ops-controller', {
+        endpoint: '/__config',
+        error: String(err),
+      })
+    );
 
     res.status(500).json({ error: `Could not read config: ${String(err)}` });
   }

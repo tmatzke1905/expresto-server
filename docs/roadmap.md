@@ -25,7 +25,7 @@ Execution rule for release work:
 ## Stabilization Package (Post-beta, Pre-1.0.0)
 
 The first public npm prerelease is `1.0.0-beta`. The current follow-up
-prerelease for continued v1 validation is `1.0.0-beta.1`. The release plan has
+prerelease for continued validation is `1.1.0-beta`. The release plan has
 been updated so that Package 4 is implemented next and becomes part of the
 stable `1.0.0` path. Package 1 follows immediately after it and closes the
 stable-release gate with a public example app.
@@ -64,7 +64,7 @@ including the supported WebSocket surface, and close the stable-release gate.
 
 Checklist:
 
-- [ ] Create a small example app that consumes the published `expresto-server@1.0.0-beta.1`
+- [ ] Create a small example app that consumes the published `expresto-server@1.1.0-beta`
       package only, not repo-internal imports.
 - [ ] Demonstrate the supported controller contract, auth, ops, scheduler, and
       supported WebSocket setup.
@@ -86,6 +86,13 @@ stable production release. They should only be started after Packages 4 and 1
 are finished and `1.0.0` has been shipped, or once the release plan has been
 explicitly changed.
 
+Status note:
+
+- Package 2 has now been implemented on its dedicated branch ahead of the
+  originally recommended execution order.
+- The remaining packages in this section stay deferred until the release plan
+  changes explicitly.
+
 ### Package 2 — Real Clustering Support
 
 Branch: `codex/feature-02-clustering-runtime`
@@ -95,23 +102,23 @@ multi-process runtime.
 
 Checklist:
 
-- [ ] Decide the supported cluster model for v2
+- [x] Decide the supported cluster model for v2
       (primary/worker, local multi-core only, or extensible abstraction).
-- [ ] Implement real bootstrap behavior when `cluster.enabled === true` instead
+- [x] Implement real bootstrap behavior when `cluster.enabled === true` instead
       of treating the flag only as a scheduler constraint.
-- [ ] Define how ops endpoints, metrics, WebSockets, and scheduler behavior work
+- [x] Define how ops endpoints, metrics, WebSockets, and scheduler behavior work
       across workers.
-- [ ] Implement graceful worker shutdown and restart strategy.
-- [ ] Add tests for clustered startup, shutdown, worker lifecycle, and
+- [x] Implement graceful worker shutdown and restart strategy.
+- [x] Add tests for clustered startup, shutdown, worker lifecycle, and
       incompatible mode combinations.
-- [ ] Update `docs/clustering.md`, `docs/configuration.md`,
+- [x] Update `docs/clustering.md`, `docs/configuration.md`,
       `docs/startup-sequence.md`, and relevant WebSocket/scheduler docs.
 
 Verification:
 
-- [ ] Cluster bootstrap works in an automated integration test
-- [ ] Shutdown behavior is documented and tested
-- [ ] Unsupported combinations fail with clear startup errors
+- [x] Cluster bootstrap works in an automated integration test
+- [x] Shutdown behavior is documented and tested
+- [x] Unsupported combinations fail with clear startup errors
 
 ### Package 3 — Supported Plugin System
 
@@ -199,7 +206,6 @@ Verification:
 4. `codex/feature-03-plugin-system`
 5. `codex/feature-05-scheduler-reliability`
 6. `codex/feature-06-ops-health-observability`
-
 
 ## Agent Execution Order
 
@@ -566,8 +572,6 @@ db.pool()
 
 ---
 
-
-
 # Branch Strategy
 
 All work should be done on **dedicated topic branches**.
@@ -575,7 +579,7 @@ Neither humans nor coding agents should work directly on `main`.
 
 Branch naming rules:
 
-``` 
+```
 main                         -> stable branch
 codex/<topic>                -> branch for coding-agent work
 feature/<topic>              -> branch for manual feature work
@@ -597,7 +601,7 @@ Rules:
 
 ## Recommended Branches for Current Roadmap
 
-``` 
+```
 codex/eventbus-stabilization
 codex/websocket-events
 codex/scheduler-events
@@ -660,7 +664,7 @@ specific task they are implementing.
 
 Optional manual branches:
 
-``` 
+```
 feature/database-facade-design
 feature/database-facade-prototype
 refactor/core-cleanup

@@ -71,6 +71,40 @@ export interface OpsConfig {
   secure?: 'none' | 'basic' | 'jwt';
 }
 
+export interface ClusterConfig {
+  /**
+   * Enables the multi-process runtime when the bundled CLI bootstrap is used.
+   *
+   * `createServer()` itself never forks workers. Cluster mode is activated by
+   * the direct runtime bootstrap (`dist/index.js` / `startConfiguredRuntime()`).
+   */
+  enabled?: boolean;
+
+  /**
+   * Number of worker processes to spawn. Defaults to the number returned by
+   * `os.availableParallelism()`.
+   */
+  workers?: number;
+
+  /**
+   * Whether the primary process should respawn workers after unexpected exits.
+   * Defaults to `true`.
+   */
+  respawn?: boolean;
+
+  /**
+   * Maximum number of automatic restarts per worker slot before the primary
+   * aborts the clustered runtime. Defaults to the configured worker count.
+   */
+  maxRestarts?: number;
+
+  /**
+   * Grace period for worker shutdown before the primary escalates to SIGKILL.
+   * Defaults to `10000`.
+   */
+  workerShutdownTimeoutMs?: number;
+}
+
 export interface AppConfig {
   port: number;
   host?: string;
@@ -90,7 +124,7 @@ export interface AppConfig {
   };
   websocket?: WebsocketConfig;
   auth?: AuthConfig;
-  cluster?: { enabled?: boolean };
+  cluster?: ClusterConfig;
   metrics?: {
     enabled?: boolean;
     endpoint?: string;

@@ -68,4 +68,20 @@ describe('Ops: Prometheus extra metrics (routes/services/conflicts)', () => {
     expect(val).toBeGreaterThanOrEqual(0);
     expect(val).toBe(0);
   });
+
+  it('exposes cluster metadata metrics for the current process', async () => {
+    const res = await request(app).get('/__metrics');
+    const map = parseMetrics(res.text);
+
+    const infoKey = Object.keys(map).find(
+      key =>
+        key.startsWith('cluster_worker_info{') &&
+        key.includes('role="single"') &&
+        key.includes('scheduler_leader="false"')
+    );
+
+    expect(infoKey).toBeTruthy();
+    expect(map[infoKey!]).toBe(1);
+    expect(map['cluster_workers_configured_total']).toBeGreaterThanOrEqual(1);
+  });
 });

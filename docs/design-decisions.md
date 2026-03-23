@@ -1,5 +1,3 @@
-
-
 # Expresto Architecture Decisions (ADR)
 
 This document records important architectural decisions made during the
@@ -375,6 +373,52 @@ Advantages:
 Trade-offs:
 
 - documentation must be actively maintained
+
+---
+
+# ADR‑009 — Clustered Runtime Uses a Local Primary/Worker Model
+
+## Context
+
+`cluster.enabled` started as a placeholder flag, but operational users need a
+real supported multi-process runtime.
+
+At the same time, expresto-server should not over-promise features that require
+additional distributed infrastructure.
+
+In particular:
+
+- HTTP request handling can be scaled locally with worker processes
+- attached scheduler execution must stay singleton
+- clustered WebSockets would require a supported adapter and sticky-session
+  policy
+- ops and metrics responses must not pretend to be globally aggregated when
+  they are emitted by one worker
+
+## Decision
+
+Adopt a conservative local primary/worker clustering model:
+
+- the primary process supervises worker lifecycle only
+- workers run the normal HTTP runtime
+- attached scheduler jobs run on exactly one leader worker
+- worker-local ops and metrics responses expose cluster metadata explicitly
+- clustered WebSockets are rejected until a supported adapter strategy exists
+
+## Consequences
+
+Advantages:
+
+- real multi-process scaling without changing the `createServer()` contract
+- deterministic scheduler ownership inside the local cluster
+- clear operational story for worker restarts and shutdown
+- unsupported WebSocket clustering fails fast instead of degrading silently
+
+Trade-offs:
+
+- metrics remain worker-local unless aggregated externally
+- the clustered runtime is intentionally scoped to local multi-core execution
+- WebSockets require a single-worker runtime for now
 
 ---
 

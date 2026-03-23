@@ -1,5 +1,6 @@
 import express from 'express';
 import client, { Counter, Histogram, Gauge, Registry } from 'prom-client';
+import type { ClusterRuntimeInfo } from './cluster/context';
 import type { AppConfig } from './config';
 import type { AppLogger } from './logger';
 
@@ -61,6 +62,19 @@ const routeConflicts = new Gauge({
   registers: [registry],
 });
 
+const clusterWorkerInfo = new Gauge({
+  name: 'cluster_worker_info',
+  help: 'Cluster role metadata for the current process',
+  labelNames: ['role', 'worker_id', 'worker_ordinal', 'scheduler_leader'] as unknown as string[],
+  registers: [registry],
+});
+
+const clusterWorkersConfigured = new Gauge({
+  name: 'cluster_workers_configured_total',
+  help: 'Configured worker count for the current runtime',
+  registers: [registry],
+});
+
 export function updateServiceMetrics(countOrKeys: number | string[]): void {
   const count = Array.isArray(countOrKeys) ? countOrKeys.length : countOrKeys;
   servicesRegistered.set(count);
@@ -90,6 +104,25 @@ export function updateRouteMetrics(
   }
   // update conflicts
   routeConflicts.set(conflicts);
+}
+
+/**
+ * Publishes process-local cluster metadata so Prometheus scrapes can tell which
+ * worker produced the sample. Metrics remain worker-local; no aggregation is
+ * attempted inside the framework.
+ */
+export function updateClusterMetrics(info: ClusterRuntimeInfo): void {
+  clusterWorkerInfo.reset();
+  clusterWorkersConfigured.set(info.workerCount);
+  clusterWorkerInfo.set(
+    {
+      role: info.role,
+      worker_id: String(info.workerId ?? 0),
+      worker_ordinal: String(info.workerOrdinal ?? 0),
+      scheduler_leader: String(info.schedulerLeader),
+    },
+    1
+  );
 }
 
 // Route-Label ermitteln

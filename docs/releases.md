@@ -12,7 +12,8 @@ It complements [roadmap.md](./roadmap.md):
 
 - The first public npm prerelease is tracked as `1.0.0-beta`
   (npm-compatible form of `1.0.0.beta`).
-- Follow-up prereleases use npm-compatible suffixes such as `1.0.0-beta.1`.
+- Follow-up prereleases use npm-compatible suffixes such as `1.0.0-beta.1`
+  and `1.1.0-beta`.
 - Prereleases may be published before the example project is complete.
 - No version may be declared stable until the example project covers the full
   supported feature set of that version.
@@ -67,7 +68,7 @@ Release gate:
 
 ## 1.0.0-beta.1
 
-Status: current public prerelease
+Status: published historical follow-up prerelease
 
 Goal: publish the supported v1 core plus the new WebSocket runtime extension
 API on npm for broader integration testing before the stable `1.0.0` release.
@@ -134,7 +135,70 @@ Stable release gate:
   - supported WebSocket setup and extension path
 - smoke checks validate example startup and basic requests
 
+## 1.1.0-beta
+
+Status: current public prerelease
+
+Goal: publish the clustered runtime preview for broader operational and
+integration testing before the stable minor release.
+
+Release notes:
+
+- [1.1.0-beta](./release-notes/1.1.0-beta.md)
+
+Roadmap scope:
+
+- completed Package 2 from [roadmap.md](./roadmap.md)
+
+Included feature set:
+
+- everything from `1.0.0-beta.1`
+- clustered primary/worker bootstrap through the bundled CLI runtime
+- leader-only scheduler ownership in cluster mode
+- documented cluster shutdown and worker restart behavior
+- worker-local ops and metrics output with explicit cluster metadata
+- automated integration coverage for clustered startup and restart flow
+
+Explicitly not included:
+
+- stable example project requirement for release promotion
+- plugin loading and plugin configuration
+- clustered WebSocket deployments
+
+Release gate:
+
+- `npm test` and `npm run coverage` are green
+- clustered runtime bootstrap is covered by automated integration tests
+- supported cluster documentation is aligned with the implementation
+
 ## 1.1.0
+
+Status: tentative
+
+Goal: ship the first stable additive release after `1.0.0` with supported
+clustering.
+
+Roadmap scope:
+
+- Package 2 from [roadmap.md](./roadmap.md)
+- final release validation for the clustered runtime
+- example project refresh if clustering becomes part of the supported example
+  surface
+
+Planned feature set:
+
+- everything from `1.1.0-beta`
+- stable clustered runtime support
+- final SemVer and compatibility review for the additive runtime change
+
+Stable release gate:
+
+- cluster behavior is fully documented and remains backwards compatible for
+  single-process apps
+- compatibility impact is reviewed against `docs/versioning-policy.md`
+- release promotion is explicitly aligned with the stable-release plan
+
+## 1.2.0
 
 Status: tentative
 
@@ -159,7 +223,7 @@ Stable release gate:
 - example project demonstrates plugin loading and lifecycle integration
 - existing v1 app contracts remain backwards compatible
 
-## 1.2.0
+## 1.3.0
 
 Status: tentative
 
@@ -180,7 +244,7 @@ Stable release gate:
 - scheduler reliability behavior is documented and tested
 - example project demonstrates the supported scheduled job setup
 
-## 1.3.0
+## 1.4.0
 
 Status: tentative
 
@@ -203,42 +267,15 @@ Stable release gate:
 - operational behavior remains fail-closed where required
 - example project demonstrates the supported operational setup
 
-## TBD Release — Real Clustering Support
-
-Status: deferred
-
-Target version: to be decided after design freeze
-
-Roadmap scope:
-
-- Package 2 from [roadmap.md](./roadmap.md)
-
-Reason version is still open:
-
-- real clustering may remain additive and fit into a minor release
-- or it may change runtime semantics enough to require a new major version
-
-Planned feature set:
-
-- real primary/worker bootstrap
-- worker lifecycle management
-- cluster-aware metrics, ops, scheduler, and WebSocket strategy
-- graceful clustered shutdown
-
-Stable release gate:
-
-- cluster behavior is fully documented
-- compatibility impact is reviewed against `docs/versioning-policy.md`
-- example or sample deployment demonstrates the supported clustered setup
-
 ## Version Mapping Summary
 
 - `1.0.0-beta`: initial beta-foundation release
 - `1.0.0-beta.1`: beta foundation plus completed Package 4
 - `1.0.0`: `1.0.0-beta.1` plus Package 1
-- `1.1.0`: Package 3 plus example refresh
-- `1.2.0`: Package 5 plus example refresh
-- `1.3.0`: Package 6 plus example refresh
-- `TBD`: Package 2, version assigned after cluster design review
+- `1.1.0-beta`: prerelease carrying completed Package 2
+- `1.1.0`: stable release target for Package 2
+- `1.2.0`: Package 3 plus example refresh
+- `1.3.0`: Package 5 plus example refresh
+- `1.4.0`: Package 6 plus example refresh
 
-_Last updated: 2026-03-22_
+_Last updated: 2026-03-23_

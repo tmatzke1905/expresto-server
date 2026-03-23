@@ -1,6 +1,6 @@
 {
   "name": "expresto-server",
-  "version": "1.0.0-beta.1",
+  "version": "1.1.0-beta",
   "description": "Express framework with hooks, auth, monitoring, scheduler, and websocket support",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

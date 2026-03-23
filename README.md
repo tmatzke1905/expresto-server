@@ -10,6 +10,7 @@ The first supported release focuses on the parts that are implemented,
 packaged, and tested today:
 
 - `createServer()` runtime bootstrap
+- local multi-process cluster bootstrap through the bundled CLI runtime
 - `runtime.getSocketServer()` after HTTP startup when WebSockets are enabled
 - file-based controller loading
 - JWT and Basic Auth
@@ -21,7 +22,7 @@ packaged, and tested today:
 
 The following topics are intentionally not part of the supported v1 scope:
 
-- full multi-process cluster runtime
+- clustered WebSocket deployments
 - plugin loading and plugin configuration
 
 ## Install
@@ -51,6 +52,20 @@ node ./node_modules/expresto-server/dist/index.js ./middleware.config.prod.json
 `createServer()` assembles the runtime and returns the Express app together
 with config, logger, EventBus, hook manager, services, and a supported
 `getSocketServer()` accessor. It does not call `listen()` on its own.
+
+## Cluster Runtime
+
+When `cluster.enabled` is set, the bundled CLI bootstrap (`dist/index.js`) runs
+the runtime in a local primary/worker layout:
+
+- the primary process supervises workers and performs graceful shutdown
+- workers serve HTTP traffic on the shared port
+- the attached scheduler runs only on the designated leader worker
+- ops endpoints and Prometheus metrics stay worker-local and expose cluster
+  metadata explicitly
+
+`createServer()` itself still assembles a single runtime and never forks
+processes on its own.
 
 ## WebSocket Extension API
 
@@ -117,7 +132,7 @@ services, JWT helpers, WebSocket access, and error handling.
 
 - [Public API](./docs/public-api.md)
 - [Releases](./docs/releases.md)
-- [Release Notes](./docs/release-notes/1.0.0-beta.1.md)
+- [Release Notes](./docs/release-notes/1.1.0-beta.md)
 - [Configuration](./docs/configuration.md)
 - [Controllers](./docs/controllers.md)
 - [Security](./docs/security.md)
@@ -131,11 +146,14 @@ services, JWT helpers, WebSocket access, and error handling.
 
 Roadmap-only topics:
 
-- [Clustering](./docs/clustering.md)
 - [Plugin System](./docs/plugin-system.md)
+
+Implemented runtime guides:
+
+- [Clustering](./docs/clustering.md)
 
 ## License
 
 MIT License. See [LICENSE](./LICENSE).
 
-_Last updated: 2026-03-22_
+_Last updated: 2026-03-23_

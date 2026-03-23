@@ -81,7 +81,13 @@
     "cluster": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "enabled": { "type": "boolean" } }
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "workers": { "type": "integer", "minimum": 1 },
+        "respawn": { "type": "boolean" },
+        "maxRestarts": { "type": "integer", "minimum": 0 },
+        "workerShutdownTimeoutMs": { "type": "integer", "minimum": 1 }
+      }
     },
 
     "metrics": {

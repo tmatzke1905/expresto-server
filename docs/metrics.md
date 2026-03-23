@@ -38,6 +38,14 @@ Built-in Prometheus metrics include:
 - `services_registered_total`
 - `routes_registered_total`
 - `route_conflicts_total`
+- `cluster_worker_info`
+- `cluster_workers_configured_total`
+
+Cluster note:
+
+- metrics stay process-local in clustered runtimes
+- `cluster_worker_info` tells you which worker produced the sample
+- shared-port scrapes are not pre-aggregated across workers
 
 ## OpenTelemetry
 
@@ -64,4 +72,4 @@ Current instrumentation covers:
 - Disable Prometheus metrics when you do not scrape them.
 - Use built-in route and service gauges to spot registration drift at startup.
 
-_Last updated: 2026-03-15_
+_Last updated: 2026-03-23_
