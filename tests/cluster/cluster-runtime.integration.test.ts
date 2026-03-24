@@ -141,55 +141,97 @@ function waitForClusterReady(
   });
 }
 
-function waitForWorkerRuntimeMessages(
-  child: ChildProcess,
-  predicate: (messages: WorkerRuntimeReadyMessage[]) => boolean,
-  timeoutMs = 20_000
-): Promise<WorkerRuntimeReadyMessage[]> {
-  return new Promise((resolve, reject) => {
-    const messages: WorkerRuntimeReadyMessage[] = [];
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('Timed out waiting for worker runtime messages'));
-    }, timeoutMs);
+function createWorkerRuntimeMessageCollector(child: ChildProcess) {
+  const messages: WorkerRuntimeReadyMessage[] = [];
+  const waiters = new Set<{
+    predicate: (messages: WorkerRuntimeReadyMessage[]) => boolean;
+    resolve: (messages: WorkerRuntimeReadyMessage[]) => void;
+    reject: (error: Error) => void;
+    timer: NodeJS.Timeout;
+  }>();
 
-    const onMessage = (message: RunnerMessage) => {
-      if (message.type === 'error') {
-        cleanup();
-        reject(new Error(message.message));
-        return;
+  const settleWaiters = () => {
+    for (const waiter of Array.from(waiters)) {
+      if (!waiter.predicate(messages)) {
+        continue;
       }
 
-      if (message.type !== 'worker-event') {
-        return;
-      }
+      clearTimeout(waiter.timer);
+      waiters.delete(waiter);
+      waiter.resolve([...messages]);
+    }
+  };
 
-      const workerMessage = message.workerMessage as { type?: unknown } | undefined;
-      if (!workerMessage || workerMessage.type !== 'worker-runtime-ready') {
-        return;
+  const onMessage = (message: RunnerMessage) => {
+    if (message.type === 'error') {
+      const err = new Error(message.message);
+      for (const waiter of Array.from(waiters)) {
+        clearTimeout(waiter.timer);
+        waiters.delete(waiter);
+        waiter.reject(err);
       }
+      return;
+    }
 
-      messages.push(message.workerMessage as WorkerRuntimeReadyMessage);
+    if (message.type !== 'worker-event') {
+      return;
+    }
+
+    const workerMessage = message.workerMessage as { type?: unknown } | undefined;
+    if (!workerMessage || workerMessage.type !== 'worker-runtime-ready') {
+      return;
+    }
+
+    messages.push(message.workerMessage as WorkerRuntimeReadyMessage);
+    settleWaiters();
+  };
+
+  const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+    const err = new Error(`Cluster process exited early (code=${code}, signal=${signal})`);
+    for (const waiter of Array.from(waiters)) {
+      clearTimeout(waiter.timer);
+      waiters.delete(waiter);
+      waiter.reject(err);
+    }
+  };
+
+  child.on('message', onMessage);
+  child.on('exit', onExit);
+
+  return {
+    waitFor(
+      predicate: (messages: WorkerRuntimeReadyMessage[]) => boolean,
+      timeoutMs = 20_000
+    ): Promise<WorkerRuntimeReadyMessage[]> {
       if (predicate(messages)) {
-        cleanup();
-        resolve(messages);
+        return Promise.resolve([...messages]);
       }
-    };
 
-    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
-      cleanup();
-      reject(new Error(`Cluster process exited early (code=${code}, signal=${signal})`));
-    };
+      return new Promise((resolve, reject) => {
+        const waiter = {
+          predicate,
+          resolve,
+          reject,
+          timer: setTimeout(() => {
+            waiters.delete(waiter);
+            reject(new Error('Timed out waiting for worker runtime messages'));
+          }, timeoutMs),
+        };
 
-    const cleanup = () => {
-      clearTimeout(timer);
+        waiters.add(waiter);
+      });
+    },
+    dispose(): void {
+      for (const waiter of Array.from(waiters)) {
+        clearTimeout(waiter.timer);
+        waiters.delete(waiter);
+        waiter.reject(new Error('Worker runtime message collector disposed'));
+      }
+
       child.off('message', onMessage);
       child.off('exit', onExit);
-    };
-
-    child.on('message', onMessage);
-    child.on('exit', onExit);
-  });
+    },
+  };
 }
 
 describe('clustered runtime integration', () => {
@@ -198,9 +240,9 @@ describe('clustered runtime integration', () => {
     const crashFile = path.join(tmpDir, 'leader-crashed.flag');
     const configPath = writeClusterConfig(tmpDir);
     const child = startClusterProcess(configPath, crashFile);
+    const workerMessages = createWorkerRuntimeMessageCollector(child);
 
-    const initialWorkersPromise = waitForWorkerRuntimeMessages(
-      child,
+    const initialWorkersPromise = workerMessages.waitFor(
       messages => {
         const uniquePids = new Set(messages.map(message => message.pid));
         return uniquePids.size >= 2;
@@ -220,8 +262,7 @@ describe('clustered runtime integration', () => {
     expect(initialSnapshot.filter(message => message.leader)).toHaveLength(1);
     expect(initialSnapshot.map(message => message.ordinal).sort()).toEqual([1, 2]);
 
-    const restartedWorkers = await waitForWorkerRuntimeMessages(
-      child,
+    const restartedWorkers = await workerMessages.waitFor(
       messages => {
         const uniquePids = new Set(messages.map(message => message.pid));
         return Array.from(uniquePids).some(
@@ -244,6 +285,7 @@ describe('clustered runtime integration', () => {
     child.kill('SIGTERM');
 
     const { code, signal } = await exitPromise;
+    workerMessages.dispose();
     expect(code).toBe(0);
     expect(signal).toBeNull();
   }, 30_000);
