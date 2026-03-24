@@ -22,15 +22,13 @@ type CliRuntime = {
 export type RuntimeBootstrapResult = CliRuntime | ClusterPrimaryRuntime;
 
 async function startSingleProcessRuntime(
-  createRuntime: (configPath: string) => Promise<CliRuntime>,
-  configPath: string
-): Promise<CliRuntime> {
-  const runtime = await createRuntime(configPath);
+  runtime: CliRuntime
+): Promise<void> {
   const { app, config, logger } = runtime;
 
   if (config.scheduler?.enabled && config.scheduler?.mode === 'standalone') {
     logger.app.info('expresto-server running in scheduler-only standalone mode (no HTTP server)');
-    return runtime;
+    return;
   }
 
   app.listen(config.port, config.host || '0.0.0.0', () => {
@@ -44,8 +42,6 @@ async function startSingleProcessRuntime(
       });
     }
   });
-
-  return runtime;
 }
 
 export async function startConfiguredRuntime(
@@ -61,5 +57,7 @@ export async function startConfiguredRuntime(
     return manager.start();
   }
 
-  return startSingleProcessRuntime(createRuntime, configPath);
+  const runtime = await createRuntime(configPath);
+  await startSingleProcessRuntime(runtime);
+  return runtime;
 }

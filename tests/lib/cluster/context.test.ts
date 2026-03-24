@@ -2,6 +2,12 @@ import os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const originalEnv = { ...process.env };
+const clusterModule = await import('node:cluster');
+const originalClusterIsWorker = clusterModule.default.isWorker;
+const originalClusterWorkerDescriptor = Object.getOwnPropertyDescriptor(
+  clusterModule.default,
+  'worker'
+);
 
 function restoreEnv(): void {
   for (const key of Object.keys(process.env)) {
@@ -15,8 +21,20 @@ function restoreEnv(): void {
   }
 }
 
+function restoreClusterState(): void {
+  clusterModule.default.isWorker = originalClusterIsWorker;
+
+  if (originalClusterWorkerDescriptor) {
+    Object.defineProperty(clusterModule.default, 'worker', originalClusterWorkerDescriptor);
+    return;
+  }
+
+  delete (clusterModule.default as { worker?: unknown }).worker;
+}
+
 afterEach(() => {
   restoreEnv();
+  restoreClusterState();
   vi.restoreAllMocks();
   vi.resetModules();
   vi.doUnmock('node:cluster');
@@ -58,12 +76,13 @@ describe('cluster runtime context', () => {
   });
 
   it('reports worker metadata when started by the clustered runtime bootstrap', async () => {
-    vi.doMock('node:cluster', () => ({
-      default: {
-        isWorker: true,
-        worker: { id: 7 },
-      },
-    }));
+    clusterModule.default.isWorker = true;
+    Object.defineProperty(clusterModule.default, 'worker', {
+      value: { id: 7 },
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
 
     process.env.EXPRESTO_CLUSTER_ENABLED = 'true';
     process.env.EXPRESTO_CLUSTER_WORKER_COUNT = '5';
